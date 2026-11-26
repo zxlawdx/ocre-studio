@@ -1,0 +1,20 @@
+[project]
+name = "ocre-studio"
+version = "0.1.0a0"
+description = "Archaeological Imaging & AI"
+authors = [{name = "Marinaldo da Costa Barroso Filho"}]
+requires-python = ">=3.12,<3.13"
+readme = "README.md"
+
+[project.urls]
+Repository = "https://github.com/zxlawdx/ocre-studio"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

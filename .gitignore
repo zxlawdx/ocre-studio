@@ -34,3 +34,9 @@ __pycache__/
 *.ipynb
 *.ocre
 *.sqlite*
+
+# Provisioned Kokentau payloads are release assets, never source history.
+/native-resources/
+/assets/native-models/
+/dist-private/
+/assets/dependency-notices/

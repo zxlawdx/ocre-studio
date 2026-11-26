@@ -1,0 +1,5 @@
+vela-framework @ git+https://github.com/zxlawdx/Vela-framework.git@b02be516871e507a2f678146cb5b8a822221883d
+numpy==2.2.6
+Pillow==12.2.0
+opencv-python-headless==4.13.0.92
+scipy==1.15.3

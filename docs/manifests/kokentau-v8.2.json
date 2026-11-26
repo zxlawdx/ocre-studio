@@ -1,0 +1,13 @@
+{
+  "assets": {
+    "kokentau-v8.2-checkpoints.zip": "284c804f033a0ff55be3db06c8deb28118b7beaf360b85cc7f9437ae999a0efb",
+    "kokentau-v8.2-metadata.zip": "a1be90886f932d5462165422ee422998004d07f750cfa38ccce630df737b08fd"
+  },
+  "author": "Marinaldo da Costa Barroso Filho",
+  "checkpoints": {
+    "adaptativo_v7.pt": "6f238cd7749792d05a1274970305e1771274f950e6bef9a63ca8d3f12b2bfad3",
+    "grade.pt": "7128b4b9e0a8f1ef4ac1c780b43d8f3f03654b3f1d90e38b4e86abd968f8281e"
+  },
+  "release": "kokentau-v8.2-models",
+  "version": "8.2"
+}

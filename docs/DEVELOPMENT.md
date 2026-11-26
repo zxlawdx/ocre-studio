@@ -1,5 +1,14 @@
 # Desenvolvimento
 
-O primeiro marco é estabelecer o scaffold oficial do Vela a partir de uma revisão fixa. Em seguida, o fluxo de inferência Kokentau será comparado localmente à referência antes da integração ao editor. Dados de pesquisa e checkpoints são mantidos em armazenamento local.
+Use Python 3.12 e um ambiente virtual. Instale `requirements.txt`, `requirements-dev.txt` e `requirements-torch.txt`; em uma estação CUDA instale separadamente o wheel apropriado para o driver. No Linux, GTK usa a introspecção do sistema.
 
-A versão inicial está em desenvolvimento. Os requisitos de publicação incluem inferência real, runtime Vela e instaladores Linux e Windows verificados.
+```bash
+python manage.py collectstatic --yes
+python manage.py assets verify
+python -m tools.patch_vela_self_test
+python manage.py self-test
+python -m pytest -q
+python manage.py runapp
+```
+
+Para provisionar os modelos nativos no ambiente de desenvolvimento, execute `python -m tools.provision_kokentau PACOTE_V7.zip PACOTE_V8.zip`. O carregamento é automático quando uma técnica Kokentau é acionada e os recursos locais ficam em `native-resources/kokentau`. Consulte [o build](BUILD.md) para distribuição e [a validação científica](KOKENTAU_V8_2.md) para o protocolo de comparação.

@@ -1,0 +1,132 @@
+<link rel="stylesheet" href="{{ static('editor/css/tokens.css') }}">
+<link rel="stylesheet" href="{{ static('editor/css/studio.css') }}">
+<section class="ocre workspace" id="ocre-editor">
+    <header class="top">
+        <a href="/home" data-vela-link data-vela-route="/home" class="wordmark">
+            <img src="{{ static('editor/mark.svg') }}" width="28" height="28" alt="">
+            Ocre Studio
+        </a>
+        <nav aria-label="Arquivo">
+            <button data-action="open">Importar foto</button>
+            <button data-action="open-project">Abrir projeto</button>
+            <button data-action="save-project" data-document>Salvar projeto</button>
+        </nav>
+        <button class="primary" data-action="export" data-document>Exportar</button>
+    </header>
+    <aside class="browser" aria-label="Fotografia e histórico">
+        <h2>Fotografia</h2>
+        <figure id="source-card" hidden>
+            <img id="thumbnail" alt="">
+            <figcaption id="filename"></figcaption>
+        </figure>
+        <p class="muted" id="empty-library">Nenhuma fotografia aberta.</p>
+        <h2>Histórico de ajustes</h2>
+        <div class="commands">
+            <button data-action="undo" data-document>Desfazer</button>
+            <button data-action="redo" data-document>Refazer</button>
+        </div>
+        <ol id="history"></ol>
+    </aside>
+    <main class="viewer" aria-label="Visualização">
+        <div class="toolbar">
+            <button data-view="fit">Ajustar</button>
+            <button data-view="actual">1:1 da prévia</button>
+            <button data-view="out" aria-label="Diminuir zoom">−</button>
+            <button data-view="in" aria-label="Aumentar zoom">+</button>
+            <button data-view="pan" aria-pressed="true">Mover</button>
+            <button data-view="roi" aria-pressed="false">Selecionar ROI</button>
+            <button data-view="clear-roi">Limpar ROI</button>
+        </div>
+        <div class="viewport">
+            <canvas id="photograph" aria-label="Prévia da fotografia"></canvas>
+            <div class="placeholder" id="placeholder">
+                <img src="{{ static('editor/mark.svg') }}" alt="" width="54" height="54">
+                <p>Abra uma fotografia para começar</p>
+                <button class="primary" data-action="open">Importar fotografia</button>
+            </div>
+        </div>
+        <div class="compare">
+            <span>Original</span>
+            <input id="comparison" type="range" min="0" max="100" value="50" aria-label="Divisor original e processado">
+            <span>Processado</span>
+        </div>
+    </main>
+    <aside class="inspector" aria-label="Processamento">
+        <h2>Histograma RGB</h2>
+        <canvas id="histogram" width="252" height="76" aria-label="Histograma RGB da imagem processada"></canvas>
+        <p class="channels"><span>R · vermelho</span><span>G · verde</span><span>B · azul</span></p>
+        <h2>Ferramentas Kokentau</h2>
+        <label>Técnica
+            <select id="preset">
+                <optgroup label="Neural">
+                    <option value="adaptativo">Adaptativo V7</option>
+                </optgroup>
+                <optgroup label="Análise arqueológica">
+                    <option value="cromatico">Cromático V8.2 · híbrido</option>
+                    <option value="combinado" selected>Combinado V8.2 · híbrido</option>
+                    <option value="estrutural">Estrutural</option>
+                    <option value="suporte_estrutural">Suporte estrutural</option>
+                    <option value="roi">Máscara de ROI</option>
+                </optgroup>
+                <optgroup label="Processamento digital clássico">
+                    <option value="blackhat">Black Hat</option>
+                    <option value="tophat">Top Hat</option>
+                    <option value="hessiana_escura">Hessiana escura</option>
+                    <option value="hessiana_clara">Hessiana clara</option>
+                    <option value="gabor">Gabor</option>
+                </optgroup>
+            </select>
+        </label>
+        <label>Dispositivo
+            <select id="device"><option value="auto">Automático</option><option value="cpu">CPU</option><option value="cuda">CUDA</option></select>
+        </label>
+        <p class="muted" id="model-state" role="status">Verificando recursos nativos…</p>
+        <label>Região de interesse
+            <select id="region">
+                <option value="selection">Seleção do canvas</option>
+                <option value="full">Fotografia inteira</option>
+                <option value="auto">Proposta automática experimental</option>
+                <option value="saved">ROI histórica do pacote</option>
+            </select>
+        </label>
+        <label>Intensidade <input type="range" id="strength" min="0" max="1" value="0.85" step="0.01"></label>
+        <button class="primary" data-action="infer" data-document>Processar</button>
+        <label>Mapa <select id="maps" data-document><option value="original">Original</option></select></label>
+        <p class="muted">O realce é exploratório. Pigmentos exigem confirmação independente.</p>
+        <h2>Ajustes clássicos</h2>
+        <label>Operação
+            <select id="adjustment">
+                <option value="brightness">Brilho</option><option value="contrast">Contraste</option>
+                <option value="saturation">Saturação</option><option value="sharpness">Nitidez</option>
+                <option value="gamma">Gama</option><option value="channel">Canal RGB</option>
+                <option value="equalize">Equalização</option>
+            </select>
+        </label>
+        <label>Valor <input id="adjustment-value" type="number" value="1" step="0.1"></label>
+        <div class="commands">
+            <button data-action="adjust" data-document>Aplicar</button>
+            <button data-action="reset" data-document>Restaurar</button>
+        </div>
+    </aside>
+    <footer>
+        <span id="status" role="status" aria-live="polite">Pronto</span>
+        <span id="dimensions"></span>
+        <span id="scale">—</span>
+    </footer>
+</section>
+<script>
+    (() => {
+        const root = document.getElementById("ocre-editor");
+        const events = new AbortController();
+        window.VelaPage = {
+            mounted() {
+                import("{{ static('editor/js/editor.js') }}")
+                    .then(({ mount }) => {
+                        if (!events.signal.aborted) mount(root, events.signal);
+                    })
+                    .catch(() => { root.querySelector("#status").textContent = "Falha ao iniciar editor."; });
+            },
+            beforeUnmount() { events.abort(); }
+        };
+    })();
+</script>
