@@ -21,3 +21,5 @@ O self-test do commit fixado tenta um novo bind imediatamente após fechar o ser
 ## Recursos Kokentau
 
 Os dois ZIPs públicos são baixados da release de modelos `kokentau-v8.2-models`. Seus SHA-256 estão no manifesto fixado em `docs/manifests/kokentau-v8.2.json`. O provisionador verifica o conteúdo, carrega os tensores com `weights_only=True` e grava arquivos em `assets/native-models/kokentau` antes do build. Vela copia essa pasta para fora do executável e a inclui no instalador. O pacote público tem uma ROI vazia e exclui a metadata privada do lote, imagens, histórico de treinamento e datasets.
+
+O workflow usa `buildapp --plugins` para excluir bindings Qt dos perfis GTK e WebView2, mesmo quando os imports opcionais forem detectados pelo empacotador. Ele preserva os avisos das bibliotecas GTK encontradas no sistema de build. A sessão de teste Linux usa um barramento D-Bus isolado e renderização por software.

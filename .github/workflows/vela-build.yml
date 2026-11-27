@@ -85,7 +85,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip xvfb python3-gi python3-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1 libwebkit2gtk-4.1-0 rpm
+          sudo apt-get install -y zip xvfb dbus-x11 libgl1-mesa-dri python3-gi python3-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1 libwebkit2gtk-4.1-0 rpm
       - name: Install Windows installer compiler
         if: runner.os == 'Windows'
         shell: pwsh
@@ -126,10 +126,13 @@ jobs:
           python manage.py buildapp --gui "${{ matrix.gui }}" --icon "${{ matrix.icon }}" --installer --dry-run
       - name: Build and validate native bundle
         shell: bash
-        run: python manage.py buildapp --gui "${{ matrix.gui }}" --icon "${{ matrix.icon }}" --installer --yes
+        run: python manage.py buildapp --gui "${{ matrix.gui }}" --icon "${{ matrix.icon }}" --installer --plugins --yes
       - name: Exercise GTK WebView on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run -a python -m tools.smoke_gui --native --workspace
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          WEBKIT_DISABLE_DMABUF_RENDERER: '1'
+        run: dbus-run-session -- xvfb-run -a -s "-screen 0 1920x1080x24" python -m tools.smoke_gui --native --workspace
       - name: Package Linux bundle
         if: runner.os == 'Linux'
         env:

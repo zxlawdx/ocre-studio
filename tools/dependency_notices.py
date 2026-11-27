@@ -5,12 +5,29 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import shutil
+import sys
 from pathlib import Path
 
 
 def collect(output: Path) -> None:
     """Copy declared wheel licenses and distribution metadata to the Vela assets."""
     output.mkdir(parents=True, exist_ok=True)
+    if sys.platform.startswith("linux"):
+        system = output / "system-gtk"
+        system.mkdir(exist_ok=True)
+        for document in Path("/usr/share/doc").glob("*/copyright"):
+            if document.parent.name.startswith(
+                (
+                    "libgtk",
+                    "libwebkit",
+                    "libjavascriptcoregtk",
+                    "gstreamer",
+                    "libgstreamer",
+                    "python3-gi",
+                    "libglib",
+                )
+            ):
+                shutil.copyfile(document, system / f"{document.parent.name}.copyright")
     for distribution in importlib.metadata.distributions():
         name = distribution.metadata["Name"]
         version = distribution.version
