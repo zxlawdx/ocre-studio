@@ -66,7 +66,7 @@ export class Viewport {
         if (!this.images.length) return;
         const [image] = this.images;
         this.zoom = Math.min(
-            this.canvas.clientWidth / image.width,
+            this.canvas.clientWidth / image.width / (this.comparison === "side" ? 2 : 1),
             this.canvas.clientHeight / image.height
         ) * 0.96;
         this.pan = [0, 0];
@@ -107,7 +107,23 @@ export class Viewport {
         const bounds = this.bounds();
         const [x, y, width, height] = bounds;
         const split = x + width * this.divider;
-        ctx.drawImage(this.images[this.comparison === "result" ? 1 : 0], ...bounds);
+        if (this.comparison === "side") {
+            const half = this.canvas.clientWidth / 2;
+            this.images.forEach((image, index) => {
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(index * half, 0, half, this.canvas.clientHeight);
+                ctx.clip();
+                ctx.drawImage(image, x + (index - 0.5) * half, y, width, height);
+                ctx.restore();
+            });
+        } else ctx.drawImage(this.images[this.comparison === "result" ? 1 : 0], ...bounds);
+        if (this.comparison === "overlay") {
+            ctx.save();
+            ctx.globalAlpha = 1 - this.divider;
+            ctx.drawImage(this.images[1], ...bounds);
+            ctx.restore();
+        }
         if (this.comparison === "wipe") {
             ctx.save();
             ctx.beginPath();
@@ -126,7 +142,7 @@ export class Viewport {
                 ctx.fillText("↔", split, y + height / 2 + 4);
             }
         }
-        if (this.roi) drawRegion(this.overlayContext, this.roi, bounds, this.dimensions);
+        if (this.roi && this.comparison !== "side") drawRegion(this.overlayContext, this.roi, bounds, this.dimensions);
         this.update(Math.round(this.zoom * this.images[0].width / this.dimensions[0] * 100));
     }
 

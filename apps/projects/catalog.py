@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -42,7 +42,7 @@ class Session:
 
     def update(self, document: ImageDocument) -> None:
         """Record the active adjustments independently from the photograph."""
-        self.history = [{"name": step.name, "value": step.value} for step in document.history]
+        self.history = [asdict(step) for step in document.history]
         self.cursor = document.cursor
         self.result = document.selected_map
         self.sha256 = document.sha256
@@ -70,6 +70,8 @@ class Catalog:
     sessions: dict[str, Session] = field(default_factory=dict)
     presets: dict[str, dict] = field(default_factory=dict)
     dirty: bool = True
+    queue: list[dict] = field(default_factory=list)
+    tabs: list[str] = field(default_factory=list)
 
     @classmethod
     def scan(cls, root: Path, recursive: bool = True, name: str = "") -> Catalog:
@@ -144,6 +146,8 @@ class Catalog:
                 "photos": self.photos,
                 "metadata": self.metadata,
                 "presets": self.presets,
+                "queue": self.queue,
+                "tabs": self.tabs,
                 "sessions": {key: vars_for_session(value) for key, value in self.sessions.items()},
             },
         )
@@ -172,6 +176,8 @@ class Catalog:
             {key: Session(**value) for key, value in data.get("sessions", {}).items()},
             data.get("presets", {}),
             False,
+            data.get("queue", []) if isinstance(data.get("queue", []), list) else [],
+            [key for key in data.get("tabs", []) if key in photos],
         )
 
     def summary(self) -> dict:
@@ -183,6 +189,7 @@ class Catalog:
             "dirty": self.dirty,
             "presets": self.presets,
             "metadata": self.metadata,
+            "tabs": self.tabs,
         }
 
 

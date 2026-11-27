@@ -19,7 +19,12 @@ export const adjustments = {
     sharpness: ["Nitidez", 0, 3, 0.05],
     gamma: ["Gama", 0.1, 5, 0.05],
     channel: ["Canal RGB", 0, 2, 1],
-    equalize: ["Equalização", 1, 1, 1]
+    equalize: ["Equalização", 1, 1, 1],
+    clahe: ["Contraste local", 1, 8, 1],
+    decorrelation: ["Separação de cores", 1, 1, 1],
+    pca: ["Componente principal", 0, 2, 1],
+    hsv: ["Canal HSV", 0, 2, 1],
+    lab: ["Canal Lab", 0, 2, 1]
 };
 
 export const neural = new Set(["adaptativo", "cromatico", "combinado"]);

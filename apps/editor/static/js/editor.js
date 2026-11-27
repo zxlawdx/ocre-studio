@@ -95,6 +95,7 @@ export async function mount(root, signal) {
     let revision = 0;
     let nativeAvailable = false;
     let documentState = null;
+    const processing = new Set();
     let clipboard = [];
     let afterOpen = null;
     let activePanel = "editor";
@@ -108,7 +109,7 @@ export async function mount(root, signal) {
             afterOpen = task.result;
             openPhoto(task.photo);
         }
-    });
+    }, saveView);
 
     function updateRegion() {
         const roi = viewport.roi;
@@ -122,7 +123,8 @@ export async function mount(root, signal) {
         return {
             zoom: viewport.zoom, pan: viewport.pan, mode: viewport.mode,
             divider: viewport.divider, comparison: viewport.comparison,
-            technique: method(), strength: strength(), region: find("#region").value
+            technique: method(), strength: strength(), region: find("#region").value,
+            adjustments: docAdjustments()
         };
     }
 
@@ -155,7 +157,8 @@ export async function mount(root, signal) {
         find("#strength").disabled = !intensity.has(method()) || busy;
         find("#strength-value").textContent = `${Math.round(strength() * 100)}%`;
         root.querySelectorAll('[data-action="infer"]').forEach((node) => {
-            node.disabled = !loaded || busy || (neural.has(method()) && !nativeAvailable);
+            node.disabled = !loaded || busy || processing.has(catalog.photo) ||
+                (neural.has(method()) && !nativeAvailable);
         });
         for (const node of root.querySelectorAll('[data-action="save-project"],[data-action="save-as"]')) {
             node.disabled = busy || (!catalog.catalog && !loaded);
@@ -163,6 +166,7 @@ export async function mount(root, signal) {
         for (const node of root.querySelectorAll('[data-action="close-project"],[data-action="save-preset"]')) {
             node.disabled = busy || !catalog.catalog;
         }
+        find("#cancel-photo").hidden = !processing.has(catalog.photo);
         const project = catalog.catalog;
         find("#project-status").textContent = project ?
             `${project.name} · ${project.dirty ? "Alterações não salvas" : "Projeto salvo"}` : "Sem projeto";
@@ -231,7 +235,9 @@ export async function mount(root, signal) {
             catalog.apply(value.catalog);
             const presets = Object.keys(value.catalog?.presets ?? {});
             find("#presets").replaceChildren(new Option("Escolher preset", ""), ...presets.map((name) => new Option(name, name)));
+            find("#batch-preset").replaceChildren(new Option("Configuração manual", ""), ...presets.map((name) => new Option(name, name)));
         }
+        if (value.queue) batch.render(value.queue);
         if (value.clear) clearDocument();
         if (value.comparison) {
             if (value.comparison_size[0] !== documentState.width || value.comparison_size[1] !== documentState.height) {
@@ -286,6 +292,12 @@ export async function mount(root, signal) {
         });
         if (doc.provenance.preset) history.unshift(element("li", `${techniqueName(doc.provenance.preset)} aplicado`));
         find("#history").replaceChildren(initial, ...history);
+        for (const key of Object.keys(adjustments).slice(0, 5)) {
+            const current = [...doc.history].reverse().find((step) => step.name === key);
+            const range = find(`#adjust-${key}`);
+            range.value = current?.value ?? 1;
+            range.nextElementSibling.value = range.value;
+        }
         plots();
         const matchingSize = doc.width === (doc.original_width ?? doc.width) &&
             doc.height === (doc.original_height ?? doc.height);
@@ -357,6 +369,8 @@ export async function mount(root, signal) {
         if (action === "in") viewport.changeZoom(1.2);
         if (action === "clear-roi") viewport.cancel();
         if (["roi", "pan"].includes(action)) viewport.mode = action;
+        if (action === "roi" && viewport.comparison === "side") viewport.comparison = "wipe";
+        viewport.draw();
         controlView();
     }
 
@@ -371,29 +385,56 @@ export async function mount(root, signal) {
         const name = remove ? find("#presets").value : window.prompt("Nome do preset");
         if (!name || (remove && !window.confirm(`Remover o preset ${name}?`))) return false;
         const summary = await api.ocre_preset(name, remove ? null : {
-            technique: method(), strength: strength(), region: find("#region").value
+            technique: method(), strength: strength(), region: find("#region").value,
+            adjustments: docAdjustments()
         });
         await present({ catalog: summary });
         return false;
     }
 
+    const docAdjustments = () => documentState?.history ?? [];
+    function exportBatch() {
+        const dialog = find("#export-results");
+        dialog.returnValue = "";
+        dialog.showModal();
+    }
     const actions = {
         open: () => { panel("editor"); return command(() => api.ocre_open()); },
         folder: () => { if (canLeave()) sync(() => api.ocre_folder(true)); },
         new: () => { if (canLeave()) { find("#new-project").returnValue = ""; find("#new-project").showModal(); } },
         help: () => find("#help").showModal(),
-        infer: () => sync(() => {
+        infer: () => {
             const mode = find("#region").value;
             const region = { selection: viewport.roi, full: null, saved: "saved", auto: "auto" }[mode];
-            return api.ocre_infer(method(), strength(), region, find("#device").value);
-        }),
+            const run = () => api.ocre_infer(method(), strength(), region, find("#device").value);
+            const photo = catalog.photo;
+            if (!photo) { sync(run); return; }
+            if (processing.has(photo) || busy) return;
+            processing.add(photo);
+            catalog.statuses.set(photo, "Processando");
+            catalog.update();
+            controls();
+            report(`Processando ${documentState.name}…`);
+            void saveView().then(run).catch((error) => {
+                processing.delete(photo);
+                catalog.statuses.set(photo, "Falha");
+                catalog.update();
+                report(error.message);
+                controls();
+            });
+        },
+        "cancel-photo": () => {
+            void api.ocre_cancel_photo(catalog.photo).then((accepted) => {
+                if (accepted) report("Cancelando após o cálculo atual…");
+            }).catch((error) => report(error.message));
+        },
         undo: () => edit("undo", 0),
         redo: () => edit("redo", 0),
         reset: () => edit("reset", 0),
         export: () => sync(() => api.ocre_export()),
         "open-project": () => { if (canLeave()) sync(() => api.ocre_project("open")); },
-        "save-project": () => sync(async () => { await saveView(); return api.ocre_project("save"); }),
-        "save-as": () => sync(async () => { await saveView(); return api.ocre_project("save-as"); }),
+        "save-project": () => sync(async () => { await saveView(); await api.ocre_tabs(catalog.tabs); return api.ocre_project("save"); }),
+        "save-as": () => sync(async () => { await saveView(); await api.ocre_tabs(catalog.tabs); return api.ocre_project("save-as"); }),
         "close-project": () => { if (canLeave()) sync(() => api.ocre_catalog_action("close")); },
         refresh: () => sync(() => api.ocre_catalog_action("refresh")),
         destination: () => sync(() => api.ocre_catalog_action("destination")),
@@ -403,6 +444,13 @@ export async function mount(root, signal) {
         "close-others": () => { catalog.tabs = catalog.photo ? [catalog.photo] : []; catalog.renderTabs(); },
         "save-preset": () => sync(() => preset(false)),
         "remove-preset": () => sync(() => preset(true)),
+        "import-preset": () => sync(() => api.ocre_preset_file("import")),
+        "export-preset": () => sync(() => api.ocre_preset_file("export", find("#presets").value)),
+        "paste-preset": () => {
+            const values = catalog.catalog?.presets[find("#presets").value]?.adjustments;
+            if (values?.length) edit("paste", values);
+        },
+        "batch-export": exportBatch,
         "context-open": () => openPhoto(catalog.context),
         "context-batch": () => { catalog.selected.add(catalog.context); catalog.update(); panel("batch"); },
         "context-results": () => openPhoto(catalog.context),
@@ -411,7 +459,7 @@ export async function mount(root, signal) {
         "toggle-gallery": () => root.classList.toggle("hide-gallery")
     };
 
-    initializeTools(find, edit, signal);
+    initializeTools(find, (operation, value) => edit(`set:${operation}`, value), signal);
     initializeResize(root, signal);
     root.addEventListener("click", (event) => {
         const trigger = event.target.closest("button");
@@ -425,8 +473,12 @@ export async function mount(root, signal) {
         if (comparison) {
             viewport.comparison = comparison;
             controlView();
-            viewport.draw();
-            find("#comparison-bar").hidden = comparison !== "wipe";
+            if (comparison === "side") {
+                viewport.mode = "pan";
+                viewport.fit();
+                controlView();
+            } else viewport.draw();
+            find("#comparison-bar").hidden = !["wipe", "overlay"].includes(comparison);
         }
         if (adjust) {
             const [operation, amount] = adjust.split(":");
@@ -451,6 +503,21 @@ export async function mount(root, signal) {
     for (const name of ["change", "input"]) {
         find(".inspector").addEventListener(name, controls, { signal });
     }
+    find("#export-results").addEventListener("close", (event) => {
+        if (event.target.returnValue !== "confirm") return;
+        const data = new FormData(event.target.querySelector("form"));
+        const scope = data.get("scope");
+        const keys = scope === "all" ? catalog.catalog?.photos ?? [] :
+            scope === "current" ? [catalog.photo].filter(Boolean) : [...catalog.selected];
+        sync(() => api.ocre_export_results(keys, {
+            format: data.get("format"), technique: data.get("technique"),
+            max_side: Number(data.get("max_side")), quality: Number(data.get("quality")),
+            favorite: data.has("favorite"), metadata: data.has("metadata")
+        }));
+    }, { signal });
+    for (const [key] of Object.entries(techniques)) {
+        find('#export-results select[name="technique"]').append(new Option(techniqueName(key), key));
+    }
     find("#presets").addEventListener("change", (event) => {
         const value = catalog.catalog?.presets[event.target.value];
         if (!value) return;
@@ -459,6 +526,17 @@ export async function mount(root, signal) {
         find("#strength").value = value.strength;
         find("#region").value = value.region;
         controls();
+    }, { signal });
+    find("#technical-details").addEventListener("toggle", async (event) => {
+        if (!event.target.open) return;
+        try {
+            const { cuda } = await api.ocre_devices();
+            const option = find('#device option[value="cuda"]');
+            option.disabled = !cuda;
+            option.textContent = cuda ? "CUDA" : "CUDA indisponível";
+        } catch (error) {
+            report(error.message);
+        }
     }, { signal });
     find("#histogram-channels").addEventListener("change", plots, { signal });
     find("#comparison").addEventListener("input", (event) => {
@@ -492,6 +570,18 @@ export async function mount(root, signal) {
         const { name, payload } = event.detail;
         if (name === "ocre:progress") report(payload.message);
         if (name === "ocre:batch") batch.render(payload);
+        if (name === "ocre:photo-processing") {
+            if (payload.catalog !== catalog.catalog?.root) return;
+            processing.delete(payload.photo);
+            catalog.statuses.set(payload.photo, ({ done: "Processada", cancelled: "Cancelada", failed: "Falha" })[payload.state]);
+            if (payload.state === "done") catalog.catalog.dirty = true;
+            catalog.update();
+            controls();
+            if (catalog.photo === payload.photo) {
+                if (payload.id && !busy) sync(() => api.ocre_result(payload.id, "open"));
+                else report(payload.message ?? (payload.id ? "Resultado disponível." : "Processamento cancelado."));
+            }
+        }
         if (name !== "ocre:result") return;
         ++revision;
         const { error, result } = payload;

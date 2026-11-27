@@ -39,6 +39,23 @@ class Batch:
                 "paused": self.paused,
             }
 
+    def restore(self, entries: list[dict]) -> None:
+        """Reload archived queue entries without executing unfinished work."""
+        with self._condition:
+            if self.running:
+                raise ValueError("A fila está ativa.")
+            tasks = []
+            for entry in entries[:10_000]:
+                try:
+                    task = Task(**entry)
+                    if task.state in {"queued", "running"}:
+                        task.state = "cancelled"
+                        task.error = "Sessão anterior encerrada"
+                    tasks.append(task)
+                except (ValueError, TypeError):
+                    continue
+            self.tasks = tasks
+
     def prepare(self, tasks: list[Task] | None = None) -> None:
         """Reserve the queue before scheduling work."""
         with self._condition:

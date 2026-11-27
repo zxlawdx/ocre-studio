@@ -20,6 +20,7 @@ class Adjustment:
 
     name: str
     value: float
+    replace: bool = False
 
     def apply(self, image: Image.Image) -> Image.Image:
         """Apply the operation to an RGB image."""
@@ -38,6 +39,20 @@ class Adjustment:
             return image.getchannel(int(self.value)).convert("RGB")
         if self.name == "equalize" and self.value == 1:
             return ImageOps.equalize(image)
+        if self.name in {"hsv", "lab"} and self.value in (0, 1, 2):
+            from apps.editor.analysis import inspect_channel
+
+            return inspect_channel(image, self.name, int(self.value))
+        if self.name == "clahe" and 1 <= self.value <= 8:
+            from apps.editor.analysis import local_equalization
+
+            return local_equalization(image, self.value)
+        if (self.name == "pca" and self.value in (0, 1, 2)) or (
+            self.name == "decorrelation" and self.value == 1
+        ):
+            from apps.editor.analysis import component_view
+
+            return component_view(image, int(self.value) if self.name == "pca" else None)
         raise ValueError("Operação ou parâmetro inválido.")
 
 
@@ -78,7 +93,12 @@ class ImageDocument:
     def render(self) -> Image.Image:
         """Render the full-resolution result with the active history."""
         image = self.original if self.selected_map == "original" else self.maps[self.selected_map]
+        effective: list[Adjustment] = []
         for step in self.history[: self.cursor]:
+            if step.replace:
+                effective = [old for old in effective if old.name != step.name]
+            effective.append(step)
+        for step in effective:
             image = step.apply(image)
         return image
 

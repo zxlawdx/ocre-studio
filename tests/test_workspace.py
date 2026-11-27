@@ -90,3 +90,90 @@ def test_batch_continues_after_failure_and_retries_only_failed_tasks():
         "done",
         "cancelled",
     ]
+
+
+def test_late_inference_persists_to_its_photo_without_replacing_active_tab(tmp_path, monkeypatch):
+    from threading import Event
+
+    from apps.projects.results import ResultStore
+    from config.wsgi import create_app
+
+    for name in ("a.png", "b.png"):
+        Image.new("RGB", (36, 42), (20, 80, 135)).save(tmp_path / name)
+    app = create_app()
+    bridge = app.bridge
+    started = Event()
+    unblock = Event()
+    completion = Event()
+
+    def fake_inference(_bridge, doc, preset, _strength, _region, _device, **_options):
+        started.set()
+        assert unblock.wait(5)
+        doc.maps[preset] = Image.new("RGB", doc.original.size, "blue")
+        doc.selected_map = preset
+
+    monkeypatch.setattr(type(bridge), "_infer", fake_inference)
+    app.events.on("ocre:photo-processing", lambda _payload: completion.set())
+    catalog = Catalog.scan(tmp_path)
+    bridge._switch_catalog(catalog)
+    first = ImageDocument.open(catalog.source("a.png"))
+    second = ImageDocument.open(catalog.source("b.png"))
+    try:
+        bridge._workspace.document = first
+        bridge._workspace.photo = "a.png"
+        bridge.ocre_infer("estrutural", 0.85, None, "cpu")
+        assert started.wait(5)
+        bridge._workspace.document = second
+        bridge._workspace.photo = "b.png"
+        unblock.set()
+        assert completion.wait(5)
+        assert bridge._workspace.document is second
+        assert bridge._workspace.photo == "b.png"
+        assert len(ResultStore(catalog.derivative_dir("a.png")).list()) == 1
+        assert not ResultStore(catalog.derivative_dir("b.png")).list()
+    finally:
+        unblock.set()
+        app.stop()
+
+
+def test_set_adjustments_are_absolute_and_undo_remains_reproducible(tmp_path):
+    source = tmp_path / "reference.png"
+    Image.new("RGB", (4, 4), (60, 60, 60)).save(source)
+    document = ImageDocument.open(source)
+    document.add(Adjustment("brightness", 2, replace=True))
+    document.add(Adjustment("brightness", 1.5, replace=True))
+    assert document.render().getpixel((0, 0)) == (90, 90, 90)
+    document.cursor -= 1
+    assert document.render().getpixel((0, 0)) == (120, 120, 120)
+
+
+def test_export_reuses_persisted_output_and_keeps_source(tmp_path):
+    from apps.projects.export import export_results
+
+    original = tmp_path / "original.png"
+    Image.new("RGB", (16, 16), (10, 20, 30)).save(original)
+    catalog = Catalog.scan(tmp_path)
+    document = ImageDocument.open(original)
+    document.maps["estrutural"] = Image.new("RGB", document.original.size, "white")
+    document.selected_map = "estrutural"
+    store = ResultStore(catalog.derivative_dir("original.png"))
+    entry = store.save(document)
+    store.update(entry["id"], favorite=True)
+    exported = tmp_path / "out"
+    exported.mkdir()
+    assert (
+        export_results(
+            catalog,
+            ["original.png"],
+            exported,
+            {
+                "format": "pdf",
+                "metadata": True,
+                "favorite": True,
+            },
+        )
+        == 1
+    )
+    assert next(exported.rglob("*.pdf")).read_bytes().startswith(b"%PDF")
+    assert next(exported.rglob("*.json")).is_file()
+    assert ImageDocument.open(original).sha256 == document.sha256

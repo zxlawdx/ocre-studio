@@ -87,6 +87,8 @@
                 <button data-comparison="original" aria-pressed="false">Original</button>
                 <button data-comparison="wipe" aria-pressed="true">Comparar</button>
                 <button data-comparison="result" aria-pressed="false">Resultado</button>
+                <button data-comparison="side" aria-pressed="false">Lado a lado</button>
+                <button data-comparison="overlay" aria-pressed="false">Sobrepor</button>
             </div>
             <button data-view="fit" title="Ajustar à tela (0)">Ajustar à tela</button>
         </div>
@@ -132,14 +134,17 @@
                 <label>Fotografias <select name="scope">
                     <option value="selection">Seleção do explorador</option>
                     <option value="current">Fotografia atual</option>
+                    <option value="folder">Pasta da fotografia atual</option>
                     <option value="all">Projeto inteiro</option>
                 </select></label>
                 <label>Área <select name="region">
                     <option value="full">Imagem inteira</option>
                     <option value="individual">Áreas individuais (ignorar sem seleção)</option>
                     <option value="auto">Sugerir região</option>
+                    <option value="shared" title="Aplica a mesma proporção da área a imagens com enquadramentos diferentes">Área compartilhada (proporcional)</option>
                 </select></label>
             </div>
+            <label>Preset do projeto <select id="batch-preset" name="preset"><option value="">Configuração manual</option></select></label>
             <fieldset class="batch-methods"><legend>Técnicas</legend><div id="batch-methods"></div></fieldset>
             <details><summary>Formato, resolução e intensidade</summary><div class="batch-options">
                 <label>Formato <select name="format"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="tiff">TIFF</option></select></label>
@@ -155,6 +160,7 @@
                 <button data-batch="resume">Retomar</button>
                 <button data-batch="cancel">Cancelar pendentes</button>
                 <button data-batch="retry">Reprocessar falhas</button>
+                <button data-action="batch-export">Exportar resultados</button>
             </div>
         </div>
         <progress id="queue-progress" value="0" max="1"></progress>
@@ -177,6 +183,7 @@
         <input type="range" id="strength" min="0" max="1" value="0.85" step="0.01">
         <div class="region-label" id="region-label" aria-live="polite">Área · imagem inteira</div>
         <button class="primary apply-button" data-action="infer" data-document>Aplicar realce</button>
+        <button id="cancel-photo" data-action="cancel-photo" hidden>Cancelar após o cálculo atual</button>
         <details><summary>Análise de estruturas</summary>
             <div id="structural-techniques" class="techniques"></div>
         </details>
@@ -195,17 +202,32 @@
                 <button data-adjust="channel:0" data-document>Canal R</button>
                 <button data-adjust="channel:1" data-document>Canal G</button>
                 <button data-adjust="channel:2" data-document>Canal B</button></div>
+            <div class="advanced-buttons">
+                <button data-adjust="clahe:2" data-document title="Equalização de luminância com limite 2">Contraste local</button>
+                <button data-adjust="decorrelation:1" data-document title="Decorrelation stretch com percentis 2 e 98">Separar cores</button>
+                <button data-adjust="pca:0" data-document title="Primeiro componente principal de RGB">PCA 1</button>
+                <button data-adjust="pca:1" data-document title="Segundo componente principal de RGB">PCA 2</button>
+                <button data-adjust="pca:2" data-document title="Terceiro componente principal de RGB">PCA 3</button>
+                <button data-adjust="hsv:0" data-document>Matiz</button>
+                <button data-adjust="hsv:1" data-document>Saturação HSV</button>
+                <button data-adjust="hsv:2" data-document>Valor HSV</button>
+                <button data-adjust="lab:0" data-document>Lab L*</button>
+                <button data-adjust="lab:1" data-document>Lab a*</button>
+                <button data-adjust="lab:2" data-document>Lab b*</button>
+            </div>
             <label>Presets <select id="presets"></select></label>
             <div class="commands"><button data-action="save-preset">Salvar preset</button><button data-action="remove-preset">Remover</button></div>
+            <div class="commands"><button data-action="import-preset">Importar</button><button data-action="export-preset">Exportar</button>
+                <button data-action="paste-preset" data-document>Aplicar ajustes salvos</button></div>
         </details>
         <details open><summary>Resultados</summary>
             <label class="sr-only" for="maps">Resultado ou mapa ativo</label>
             <select id="maps" data-document><option value="original">Original</option></select>
             <div id="result-list"></div>
         </details>
-        <details><summary>Detalhes técnicos</summary>
+        <details id="technical-details"><summary>Detalhes técnicos</summary>
             <label>Dispositivo
-                <select id="device"><option value="auto">Automático</option><option value="cpu">CPU</option><option value="cuda">CUDA</option></select>
+                <select id="device"><option value="auto">Automático</option><option value="cpu">CPU</option><option value="cuda" disabled>CUDA indisponível</option></select>
             </label>
             <p id="model-state" class="muted"></p>
             <pre id="provenance"></pre>
@@ -227,6 +249,16 @@
             <div class="commands"><button value="cancel" formnovalidate>Cancelar</button><button class="primary" value="confirm">Escolher pasta e criar</button></div>
         </form>
     </dialog>
+    <dialog id="export-results"><form method="dialog"><h2>Exportar resultados</h2>
+        <label>Fotografias <select name="scope"><option value="selection">Seleção</option><option value="current">Fotografia atual</option><option value="all">Projeto inteiro</option></select></label>
+        <label>Formato <select name="format"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="tiff">TIFF</option><option value="pdf">PDF comparativo</option><option value="json">Parâmetros JSON</option></select></label>
+        <label>Técnica <select name="technique"><option value="">Todas as técnicas</option></select></label>
+        <label>Lado máximo (0 = manter tamanho) <input type="number" name="max_side" value="0" min="0" max="10000"></label>
+        <label>Qualidade JPEG <input type="number" name="quality" value="92" min="1" max="100"></label>
+        <label><input type="checkbox" name="favorite"> Somente favoritos</label>
+        <label><input type="checkbox" name="metadata"> Incluir parâmetros</label>
+        <div class="commands"><button value="cancel" formnovalidate>Cancelar</button><button class="primary" value="confirm">Escolher destino</button></div>
+    </form></dialog>
     <dialog id="help"><form method="dialog"><h2>Atalhos e limites científicos</h2>
         <p><kbd>Ctrl+O</kbd> Importar · <kbd>Ctrl+S</kbd> Salvar · <kbd>Ctrl+W</kbd> Fechar aba</p>
         <p><kbd>R</kbd> Selecionar região · <kbd>M</kbd> Mover · <kbd>Esc</kbd> Limpar · <kbd>0</kbd> Ajustar</p>

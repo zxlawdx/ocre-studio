@@ -20,6 +20,9 @@ class Workspace:
 
     projects: ProjectRepository = field(default_factory=ProjectRepository)
     jobs: JobManager = field(default_factory=lambda: JobManager(io_workers=1, max_pending_jobs=1))
+    inference_jobs: JobManager = field(
+        default_factory=lambda: JobManager(io_workers=1, max_pending_jobs=3)
+    )
     batch_jobs: JobManager = field(
         default_factory=lambda: JobManager(io_workers=1, max_pending_jobs=1)
     )
@@ -36,6 +39,7 @@ class Workspace:
         """Wait for the running operation before releasing loaded models."""
         self.batch.control("cancel")
         self.batch_jobs.shutdown()
+        self.inference_jobs.shutdown()
         self.jobs.shutdown()
         self.native_models.clear()
         self.model = None

@@ -75,7 +75,7 @@ export class CatalogView {
         if (!same) {
             this.selected.clear();
             this.expanded.clear();
-            this.tabs = [];
+            this.tabs = catalog?.tabs?.slice() ?? [];
             this.limit = PAGE;
             this.photo = null;
             this.statuses.clear();

@@ -6,12 +6,13 @@ const labels = {
 };
 
 export class BatchView {
-    constructor(root, catalog, api, signal, report, openResult) {
+    constructor(root, catalog, api, signal, report, openResult, saveView) {
         this.root = root;
         this.catalog = catalog;
         this.api = api;
         this.report = report;
         this.openResult = openResult;
+        this.saveView = saveView;
         this.form = root.querySelector("#batch-form");
         const methods = root.querySelector("#batch-methods");
         for (const [key, [name, help]] of Object.entries(techniques)) {
@@ -21,6 +22,14 @@ export class BatchView {
             label.append(input, document.createTextNode(name));
             methods.append(label);
         }
+        this.form.querySelector("#batch-preset").addEventListener("change", (event) => {
+            const preset = this.catalog.catalog?.presets[event.target.value];
+            if (!preset) return;
+            this.form.querySelectorAll('[name="method"]').forEach((input) => {
+                input.checked = input.value === preset.technique;
+            });
+            this.form.elements.strength.value = Math.round(preset.strength * 100);
+        }, { signal });
         this.form.addEventListener("submit", (event) => {
             event.preventDefault();
             void this.start();
@@ -38,14 +47,21 @@ export class BatchView {
     async start() {
         const data = new FormData(this.form);
         const scope = data.get("scope");
+        const active = this.catalog.photo;
+        const folder = active?.split("/").slice(0, -1).join("/");
         const keys = scope === "all" ? this.catalog.catalog?.photos :
-            scope === "current" ? [this.catalog.photo].filter(Boolean) : [...this.catalog.selected];
+            scope === "current" ? [active].filter(Boolean) :
+            scope === "folder" && active ? this.catalog.catalog?.photos.filter((name) =>
+                name.split("/").slice(0, -1).join("/") === folder) :
+                scope === "folder" ? [] : [...this.catalog.selected];
         this.form.querySelector("#start-batch").disabled = true;
         try {
+            await this.saveView();
             await this.api.ocre_batch(keys ?? [], data.getAll("method"), {
                 region: data.get("region"), format: data.get("format"),
                 max_side: Number(data.get("max_side")), quality: Number(data.get("quality")),
-                strength: Number(data.get("strength")) / 100
+                strength: Number(data.get("strength")) / 100,
+                adjustments: this.catalog.catalog?.presets[data.get("preset")]?.adjustments ?? []
             });
             this.render(await this.api.ocre_batch_state());
         } catch (error) {

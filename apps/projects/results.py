@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -30,7 +32,13 @@ class ResultStore:
                 if path.parent.is_symlink() or path.is_symlink() or path.stat().st_size > 128_000:
                     continue
                 entry = json.loads(path.read_text(encoding="utf-8"))
-                if entry.get("id") != path.parent.name or entry.get("format") not in FORMATS:
+                if (
+                    entry.get("id") != path.parent.name
+                    or not re.fullmatch(r"[0-9a-f]{32}", path.parent.name)
+                    or entry.get("format") not in FORMATS
+                    or not re.fullmatch(r"[a-z][a-z0-9_]{0,45}", str(entry.get("technique", "")))
+                    or not isinstance(entry.get("created"), str)
+                ):
                     continue
                 entries.append(entry)
             except (OSError, ValueError):
@@ -62,8 +70,7 @@ class ResultStore:
             "source_sha256": document.sha256,
             "source": document.source.name,
             "adjustments": [
-                {"name": step.name, "value": step.value}
-                for step in (() if base_only else document.history[: document.cursor])
+                asdict(step) for step in (() if base_only else document.history[: document.cursor])
             ],
             **document.provenance,
         }

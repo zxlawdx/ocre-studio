@@ -73,6 +73,10 @@ def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
     """)
     wait_for(window, "document.querySelector('#region-label').textContent.includes('selecionados')")
     snapshot("roi")
+    click(".apply-button")
+    wait_for(window, "document.querySelector('#result-list [data-result]') !== null", timeout=45)
+    wait_for(window, "document.querySelector('#status').textContent === 'Pronto'")
+    snapshot("realce")
     click('.workspaces [data-panel="batch"]')
     window.evaluate_js("""
         document.querySelector('#batch-form select[name=scope]').value = 'all';
@@ -133,16 +137,18 @@ def main() -> None:
                 while app.bridge._window is None and monotonic() < end:
                     sleep(0.1)
                 window = app.bridge._window
-                if window is None or not window.events.loaded.wait(15):
+                if window is None or not window.events.loaded.wait(45):
                     raise RuntimeError("A WebView não carregou.")
                 window.resize(width, height)
+                if width >= 1920 and height >= 1080 and options.screenshot:
+                    window.toggle_fullscreen()
                 saved = source.parent / "estudo.ocre"
                 app.bridge._file = lambda description, **_kwargs: (
                     saved if "*.ocre" in description else source
                 )
                 app.bridge._folder = lambda: source.parent
-                wait_for(window, "Boolean(document.querySelector('.studio-home'))")
-                window.evaluate_js("document.querySelector('.studio-home a').click()")
+                wait_for(window, "Boolean(document.querySelector('.studio-home, #ocre-editor'))")
+                window.evaluate_js("document.querySelector('.studio-home a')?.click()")
                 wait_for(window, "Boolean(document.getElementById('ocre-editor'))")
                 sleep(0.4)
                 window.evaluate_js("document.querySelector('[data-action=open]').click()")

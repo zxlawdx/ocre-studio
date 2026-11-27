@@ -6,7 +6,7 @@ import json
 from concurrent.futures import Future
 from dataclasses import asdict
 from pathlib import Path
-from threading import RLock
+from threading import Event, RLock
 from time import perf_counter
 
 import numpy as np
@@ -43,6 +43,7 @@ class EditorBridge(CatalogCommands, BaseBridge):
         self._workspace = workspace
         self._state_lock = RLock()
         self._busy = False
+        self._pending: dict[str, Event] = {}
 
     def _file(self, description: str, *, save_as: str = "") -> Path | None:
         if self._window is None:
@@ -103,6 +104,17 @@ class EditorBridge(CatalogCommands, BaseBridge):
                     module = exc.name or "desconhecido"
                     self.logger.error(f"Dependência ausente durante o processamento: {module}")
                     self.emit("ocre:result", {"error": f"Dependência ausente: {module}."})
+                except FileNotFoundError:
+                    self.emit(
+                        "ocre:result",
+                        {
+                            "error": "Arquivo não encontrado. Verifique se ele foi movido ou se a unidade está conectada."
+                        },
+                    )
+                except PermissionError:
+                    self.emit(
+                        "ocre:result", {"error": "Sem permissão para acessar o arquivo ou a pasta."}
+                    )
                 except Exception as exc:
                     self.logger.error(f"Operação científica falhou: {type(exc).__name__}")
                     error = str(exc) if isinstance(exc, ValueError) else "Falha no processamento."
@@ -131,6 +143,15 @@ class EditorBridge(CatalogCommands, BaseBridge):
                 "native_available": self._workspace.native_models.available(),
                 "catalog": self._workspace.catalog.summary() if self._workspace.catalog else None,
             }
+
+    def ocre_devices(self) -> dict:
+        """Probe CUDA only when the researcher opens details."""
+        try:
+            import torch
+
+            return {"cuda": torch.cuda.is_available()}
+        except (ImportError, OSError, RuntimeError):
+            return {"cuda": False}
 
     def ocre_open(self) -> bool:
         """Select a photograph in a native file dialog."""
@@ -273,23 +294,83 @@ class EditorBridge(CatalogCommands, BaseBridge):
             "seconds": perf_counter() - start,
         }
 
+    def _schedule_inference(
+        self,
+        document: ImageDocument,
+        preset: str,
+        strength: float,
+        region: list | str | None,
+        device: str,
+    ) -> bool:
+        catalog, photo = self._catalog(), self._workspace.photo
+        if photo in self._pending:
+            raise ValueError("Esta fotografia já está sendo processada.")
+        stop = Event()
+        self._pending[photo] = stop
+        working = ImageDocument(document.source, document.sha256, document.original)
+
+        def process() -> dict:
+            with self._workspace.inference_lock:
+                if stop.is_set():
+                    return {}
+                self._infer(working, preset, strength, region, device, announce=False)
+            if stop.is_set():
+                return {}
+            from apps.projects.results import ResultStore
+
+            return ResultStore(catalog.derivative_dir(photo)).save(working, base_only=True)
+
+        def completed(future: Future) -> None:
+            with self._state_lock:
+                self._pending.pop(photo, None)
+                current = self._workspace.catalog is catalog
+            payload = {"photo": photo, "state": "failed", "catalog": str(catalog.root)}
+            try:
+                entry = future.result()
+            except Exception as error:
+                payload["message"] = (
+                    str(error) if isinstance(error, ValueError) else "Falha ao aplicar realce."
+                )
+                self.logger.error(f"Processamento da fotografia falhou: {type(error).__name__}")
+            else:
+                payload["state"] = "done" if entry else "cancelled"
+                if entry:
+                    payload["id"] = entry["id"]
+                    with self._state_lock:
+                        session = catalog.sessions.setdefault(photo, Session())
+                        session.result = entry["id"]
+                        session.sha256 = document.sha256
+                        catalog.dirty = True
+            if current:
+                self.emit("ocre:photo-processing", payload)
+
+        try:
+            self._workspace.inference_jobs.submit(process, on_done=completed)
+        except Exception:
+            self._pending.pop(photo, None)
+            raise
+        return False
+
+    def ocre_cancel_photo(self, photo: str) -> bool:
+        """Discard an outstanding individual result if it has not been written."""
+        with self._state_lock:
+            if photo not in self._pending:
+                return False
+            self._pending[photo].set()
+            return True
+
     def ocre_infer(
         self, preset: str, strength: float, region: list | str | None, device: str
     ) -> bool:
         """Run the selected native preset against the original image."""
         with self._state_lock:
             document = self._document()
+            if self._workspace.catalog and self._workspace.photo:
+                return self._schedule_inference(document, preset, strength, region, device)
 
             def process() -> dict:
                 with self._workspace.inference_lock:
                     self._infer(document, preset, strength, region, device)
-                photo = self._workspace.photo
-                if photo:
-                    derivative = self._store(photo).save(document, base_only=True)
-                    identifier = derivative["id"]
-                    document.maps[identifier] = document.maps[preset]
-                    document.selected_map = identifier
-                    self._record(document)
                 return {"document": self._snapshot()}
 
             return self._run(process)
@@ -304,6 +385,12 @@ class EditorBridge(CatalogCommands, BaseBridge):
                     if value != "original" and value not in document.maps:
                         raise ValueError("Mapa indisponível.")
                     document.selected_map = value
+                    if self._workspace.photo and value in self._techniques:
+                        entry = self._store(self._workspace.photo).save(document, base_only=True)
+                        document.maps[entry["id"]] = document.maps[value]
+                        document.selected_map = entry["id"]
+                elif operation.startswith("set:"):
+                    document.add(Adjustment(operation[4:], float(value), replace=True))
                 elif operation == "paste":
                     if not isinstance(value, list) or len(value) + document.cursor > 64:
                         raise ValueError("Ajustes copiados excedem o limite do histórico.")
@@ -348,6 +435,7 @@ class EditorBridge(CatalogCommands, BaseBridge):
                     if path.suffix.lower() != ".ocre":
                         raise ValueError("Use a extensão .ocre no nome do projeto.")
                     if catalog is not None:
+                        catalog.queue = self._workspace.batch.snapshot()["tasks"]
                         catalog.save(path)
                         return {
                             "catalog": catalog.summary(),

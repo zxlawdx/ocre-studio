@@ -9,9 +9,10 @@ from pathlib import Path
 from PIL import Image, ImageOps
 from webview import FileDialog
 
-from apps.editor.service import MAX_PIXELS, ImageDocument, preview
+from apps.editor.service import MAX_PIXELS, Adjustment, ImageDocument, preview
 from apps.projects.batch import Task
 from apps.projects.catalog import Catalog, Session
+from apps.projects.export import export_results
 from apps.projects.results import FORMATS, ResultStore
 
 
@@ -43,12 +44,18 @@ class CatalogCommands:
         return ResultStore(self._catalog().derivative_dir(photo))
 
     def _switch_catalog(self, catalog: Catalog | None) -> dict:
-        if self._workspace.batch.running:
-            raise ValueError("Encerre o lote antes de trocar de projeto.")
+        if self._workspace.batch.running or self._pending:
+            raise ValueError("Encerre o processamento antes de trocar de projeto.")
+        self._workspace.batch.restore(catalog.queue if catalog else [])
+        self._batch_process = None
         self._workspace.catalog = catalog
         self._workspace.photo = None
         self._workspace.document = None
-        return {"catalog": catalog.summary() if catalog else None, "clear": True}
+        return {
+            "catalog": catalog.summary() if catalog else None,
+            "clear": True,
+            "queue": self._workspace.batch.snapshot(),
+        }
 
     def ocre_recent(self) -> list[dict]:
         """List recently opened project files."""
@@ -165,6 +172,17 @@ class CatalogCommands:
         except (OSError, ValueError):
             return ""
 
+    def ocre_tabs(self, keys: list[str]) -> None:
+        """Store tabs as catalog identifiers rather than duplicate image buffers."""
+        with self._state_lock:
+            catalog = self._workspace.catalog
+            if catalog is None:
+                return
+            valid = list(dict.fromkeys(key for key in keys[:200] if key in catalog.photos))
+            if valid != catalog.tabs:
+                catalog.tabs = valid
+                catalog.dirty = True
+
     def ocre_view(self, key: str, roi: list | None, view: dict) -> None:
         """Store the latest canvas state without converting it to preview pixels."""
         with self._state_lock:
@@ -231,6 +249,83 @@ class CatalogCommands:
         with self._state_lock:
             return self._run(apply)
 
+    def ocre_export_results(self, photos: list[str], options: dict) -> bool:
+        """Export existing derivatives through a native destination picker."""
+        catalog = self._catalog()
+        if not photos:
+            raise ValueError("Selecione fotografias para exportar.")
+        target = self._folder()
+        if target is None:
+            return False
+
+        def export() -> dict:
+            count = export_results(catalog, photos, target, options)
+            return {"message": f"{count} resultados exportados."}
+
+        with self._state_lock:
+            return self._run(export)
+
+    def _preset_value(self, value: dict) -> dict:
+        technique = value.get("technique")
+        region = value.get("region", "selection")
+        strength = float(value.get("strength", 0.85))
+        adjustments = value.get("adjustments", [])
+        if (
+            technique not in self._techniques
+            or not 0 <= strength <= 1
+            or region not in {"selection", "full", "auto", "saved"}
+            or not isinstance(adjustments, list)
+            or len(adjustments) > 64
+        ):
+            raise ValueError("Configuração de preset inválida.")
+        sample = Image.new("RGB", (2, 2))
+        for item in adjustments:
+            Adjustment(**item).apply(sample)
+        return {
+            "technique": technique,
+            "region": region,
+            "strength": strength,
+            "adjustments": adjustments,
+        }
+
+    def ocre_preset_file(self, action: str, name: str = "") -> bool:
+        """Read or write a portable, versioned preset without an embedded ROI."""
+        catalog = self._catalog()
+        if action == "export" and name not in catalog.presets:
+            raise ValueError("Selecione um preset para exportar.")
+        path = self._file(
+            "Preset Ocre (*.json)", save_as="preset-ocre.json" if action == "export" else ""
+        )
+        if path is None:
+            return False
+
+        def exchange() -> dict:
+            if action == "export":
+                with path.open("x", encoding="utf-8") as stream:
+                    json.dump(
+                        {"version": 1, "name": name, "preset": catalog.presets[name]},
+                        stream,
+                        ensure_ascii=False,
+                    )
+                return {"message": "Preset exportado."}
+            if action != "import" or path.stat().st_size > 64_000:
+                raise ValueError("Arquivo de preset inválido.")
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if data.get("version") != 1:
+                raise ValueError("Versão de preset incompatível.")
+            original = data["name"].strip()[:72]
+            key, counter = original, 2
+            while key in catalog.presets:
+                key = f"{original} ({counter})"
+                counter += 1
+            return {
+                "catalog": self.ocre_preset(key, data["preset"]),
+                "message": "Preset importado.",
+            }
+
+        with self._state_lock:
+            return self._run(exchange)
+
     def ocre_preset(self, name: str, value: dict | None) -> dict:
         """Save or delete a named preset in the active project."""
         catalog = self._catalog()
@@ -240,7 +335,7 @@ class CatalogCommands:
         if value is None:
             catalog.presets.pop(name, None)
         else:
-            catalog.presets[name] = value
+            catalog.presets[name] = self._preset_value(value)
         catalog.dirty = True
         return catalog.summary()
 
@@ -264,9 +359,26 @@ class CatalogCommands:
         mode = options.get("region", "full")
         if format_name not in FORMATS or not 0 <= max_side <= 10000 or not 1 <= quality <= 100:
             raise ValueError("Configuração de saída inválida.")
-        if mode not in {"full", "individual", "auto"} or not 0 <= strength <= 1:
+        if mode not in {"full", "individual", "auto", "shared"} or not 0 <= strength <= 1:
             raise ValueError("Parâmetros do lote inválidos.")
         regions = {key: catalog.sessions.get(key, Session()).roi for key in photos}
+        shared = None
+        if mode == "shared":
+            current = catalog.sessions.get(self._workspace.photo, Session()).roi
+            if not current:
+                raise ValueError("Defina uma área na fotografia de referência.")
+            image = self._document().original
+            shared = tuple(n / size for n, size in zip(current, (*image.size, *image.size)))
+        steps = [
+            Adjustment(**item)
+            for item in self._preset_value(
+                {
+                    "technique": techniques[0],
+                    "strength": strength,
+                    "adjustments": options.get("adjustments", []),
+                }
+            )["adjustments"]
+        ]
 
         def process(task: Task) -> dict:
             if mode == "individual" and not regions[task.photo]:
@@ -277,8 +389,22 @@ class CatalogCommands:
                 if mode == "individual"
                 else ("auto" if mode == "auto" else None)
             )
+            if shared is not None:
+                width, height = document.original.size
+                x, y, right, bottom = (
+                    round(fraction * size)
+                    for fraction, size in zip(shared, (width, height, width, height))
+                )
+                region = [
+                    min(x, width - 1),
+                    min(y, height - 1),
+                    max(right, x + 1),
+                    max(bottom, y + 1),
+                ]
             with self._workspace.inference_lock:
                 self._infer(document, task.technique, strength, region, "auto", announce=False)
+            for adjustment in steps:
+                document.add(adjustment)
             return ResultStore(catalog.derivative_dir(task.photo)).save(
                 document, format_name, max_side, quality
             )
