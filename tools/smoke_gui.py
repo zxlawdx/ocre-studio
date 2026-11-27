@@ -244,9 +244,7 @@ def main() -> None:
                     "document.querySelector('#history li:last-child')?.textContent.includes('Brilho · 1,3')",
                 )
                 if options.native:
-                    wait_for(
-                        window, "document.querySelector('.apply-button')?.disabled === false"
-                    )
+                    wait_for(window, "document.querySelector('.apply-button')?.disabled === false")
                     print(window.evaluate_js("document.querySelector('#model-state').textContent"))
                     window.evaluate_js(
                         "document.getElementById('region').value = 'full';"
