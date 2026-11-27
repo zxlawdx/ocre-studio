@@ -51,6 +51,7 @@ jobs:
           python -m tools.patch_vela_self_test
           python manage.py self-test
           python -m pytest -q
+          node --test tests/roi.test.mjs
           python -c "from pathlib import Path; from tools.check_runtime_assets import check; check(Path.cwd())"
   build:
     needs: ci
@@ -85,7 +86,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y zip xvfb python3-gi python3-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1 libwebkit2gtk-4.1-0 rpm
-          python -c 'import sysconfig; from pathlib import Path; Path(sysconfig.get_path("purelib"), "ocre-system-gi.pth").write_text("/usr/lib/python3/dist-packages\n")'
       - name: Install Windows installer compiler
         if: runner.os == 'Windows'
         shell: pwsh
@@ -108,6 +108,10 @@ jobs:
           gh release download "$KOKENTAU_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'kokentau-*.zip' --dir "$RUNNER_TEMP/kokentau"
           python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json
           python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target assets/native-models/kokentau
+      - name: Expose GTK bindings after installing pinned Python dependencies
+        if: runner.os == 'Linux'
+        run: |
+          python -c 'import sysconfig; from pathlib import Path; Path(sysconfig.get_path("purelib"), "ocre-system-gi.pth").write_text("/usr/lib/python3/dist-packages\n")'
       - name: Collect distribution notices
         shell: bash
         run: python -m tools.dependency_notices
@@ -123,9 +127,9 @@ jobs:
       - name: Build and validate native bundle
         shell: bash
         run: python manage.py buildapp --gui "${{ matrix.gui }}" --icon "${{ matrix.icon }}" --installer --yes
-      - name: Exercise Qt WebView on Linux
+      - name: Exercise GTK WebView on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run -a python -m tools.smoke_gui --native
+        run: xvfb-run -a python -m tools.smoke_gui --native --workspace
       - name: Package Linux bundle
         if: runner.os == 'Linux'
         env:

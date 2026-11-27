@@ -55,8 +55,8 @@ def make_deb(root: Path, dist: Path) -> None:
     control.mkdir()
     (control / "control").write_text(
         f"Package: ocre-studio\nVersion: {APP_VERSION}\nArchitecture: amd64\n"
-        f"Maintainer: {APP_AUTHOR}\nDepends: libc6 (>= 2.34), libegl1, libgl1, libnss3, "
-        f"libgbm1, libxcb-cursor0, libxkbcommon-x11-0\nDescription: {APP_DESCRIPTION}\n",
+        f"Maintainer: {APP_AUTHOR}\nDepends: libc6 (>= 2.34), libgtk-3-0, libwebkit2gtk-4.1-0, "
+        f"gir1.2-gtk-3.0, gir1.2-webkit2-4.1\nDescription: {APP_DESCRIPTION}\n",
         encoding="utf-8",
     )
     target = dist / f"ocre-studio_{APP_VERSION}_amd64.deb"
@@ -77,7 +77,7 @@ Summary: {APP_DESCRIPTION}
 License: See project and bundled dependency notices
 BuildArch: x86_64
 AutoReqProv: no
-Requires: glibc >= 2.34, libglvnd-egl, libglvnd-glx, nss, mesa-libgbm, xcb-util-cursor, libxkbcommon-x11
+Requires: glibc >= 2.34, gtk3, webkit2gtk4.1
 
 %description
 {APP_DESCRIPTION}

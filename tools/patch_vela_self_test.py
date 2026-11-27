@@ -10,11 +10,15 @@ def main() -> None:
     source = path.read_text(encoding="utf-8")
     old = '    checks["shutdown"] = ApiServer.is_port_available("127.0.0.1", port)'
     new = """    try:
-        with socket.create_connection(("127.0.0.1", port), timeout=1):
+        with socket.create_connection(("127.0.0.1", port), timeout=5):
             checks["shutdown"] = False
     except ConnectionRefusedError:
         checks["shutdown"] = True"""
     if new in source:
+        return
+    previous = new.replace("timeout=5", "timeout=1")
+    if previous in source:
+        path.write_text(source.replace(previous, new, 1), encoding="utf-8")
         return
     if source.count(old) != 1:
         raise RuntimeError("Vela revision does not match the expected shutdown probe.")
