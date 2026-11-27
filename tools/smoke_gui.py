@@ -23,7 +23,12 @@ def wait_for(window, expression: str, timeout: float = 15) -> None:
         if window.evaluate_js(expression):
             return
         sleep(0.1)
-    raise RuntimeError(f"Estado da interface não atingido: {expression}")
+    state = window.evaluate_js("""
+        JSON.stringify({status: document.querySelector('#status')?.textContent,
+        maps: document.querySelector('#maps')?.value,
+        dimensions: document.querySelector('#dimensions')?.textContent})
+    """)
+    raise RuntimeError(f"Estado da interface não atingido: {expression}; estado: {state}")
 
 
 def capture(path: Path) -> None:
@@ -244,10 +249,13 @@ def main() -> None:
                         "document.getElementById('device').value = 'cpu';"
                         "document.querySelector('[data-action=infer]').click()"
                     )
-                    wait_for(window, "document.getElementById('maps')?.value === 'combinado'")
+                    wait_for(
+                        window, "document.getElementById('maps')?.value === 'combinado'", timeout=180
+                    )
                     wait_for(
                         window,
                         "document.getElementById('dimensions')?.textContent.includes('CPU')",
+                        timeout=180,
                     )
                 exercise_histogram(window, options.screenshot)
                 if options.workspace:
