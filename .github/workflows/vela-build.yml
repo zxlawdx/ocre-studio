@@ -20,6 +20,8 @@ concurrency:
   cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 env:
+  PYTHONUTF8: '1'
+  PYTHONIOENCODING: 'utf-8'
   OMP_NUM_THREADS: '2'
   VELA_PRODUCTION: '1'
   OCRE_REQUIRE_NATIVE: '1'
@@ -51,6 +53,11 @@ jobs:
           fi
           python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json
           python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target assets/native-models/kokentau
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-kokentau
+          path: ${{ runner.temp }}/kokentau/*.zip
+          if-no-files-found: error
       - run: |
           ruff check apps config tests tools manage.py
           ruff format --check apps config tests tools manage.py
@@ -107,16 +114,14 @@ jobs:
           python -m pip install -r requirements.txt -r requirements-build.txt
           python -m pip install -r requirements-torch.txt
           python -m pip check
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-kokentau
+          path: ${{ runner.temp }}/kokentau
       - name: Verify and provision authorized model assets
-        env:
-          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          if ! gh release download "$KOKENTAU_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'kokentau-*.zip' --dir "$RUNNER_TEMP/kokentau"; then
-            gh release download v0.1.0-alpha --repo "$GITHUB_REPOSITORY" --pattern 'Ocre-Studio-linux-*.zip' --dir "$RUNNER_TEMP/previous"
-            python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json --recover-bundle "$RUNNER_TEMP/previous/Ocre-Studio-linux-x86_64-0.1.0-alpha.zip"
-          fi
           python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json
           python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target assets/native-models/kokentau
       - name: Expose GTK bindings after installing pinned Python dependencies
