@@ -1,7 +1,7 @@
 """Native Vela metadata and offline desktop configuration."""
 
 APP_TITLE = "Ocre Studio"
-APP_VERSION = "0.1.0-alpha"
+APP_VERSION = "0.1.0-alpha.1"
 APP_AUTHOR = "Marinaldo da Costa Barroso Filho"
 APP_DESCRIPTION = "Archaeological Imaging & AI"
 APP_ICON = "assets/icons/ocre-studio.png"

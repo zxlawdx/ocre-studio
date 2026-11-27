@@ -1,6 +1,6 @@
 [project]
 name = "ocre-studio"
-version = "0.1.0a0"
+version = "0.1.0a1"
 description = "Archaeological Imaging & AI"
 authors = [{name = "Marinaldo da Costa Barroso Filho"}]
 requires-python = ">=3.12,<3.13"
