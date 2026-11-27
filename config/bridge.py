@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from concurrent.futures import Future
 from dataclasses import asdict
 from pathlib import Path
@@ -15,6 +16,8 @@ from webview import FileDialog
 
 from apps.editor.service import Adjustment, ImageDocument, histogram, preview
 from apps.model_library.service import KokentauModel
+from apps.projects.bridge import CatalogCommands
+from apps.projects.catalog import Catalog, Session
 from config.composition import Workspace
 
 NEURAL_PRESETS = {"adaptativo", "cromatico", "combinado"}
@@ -30,8 +33,10 @@ STRUCTURAL_PRESETS = {
 }
 
 
-class EditorBridge(BaseBridge):
+class EditorBridge(CatalogCommands, BaseBridge):
     """Expose explicit editor actions while keeping native paths in Python."""
+
+    _techniques = NEURAL_PRESETS | STRUCTURAL_PRESETS
 
     def __init__(self, router, config, workspace: Workspace) -> None:
         super().__init__(router=router, config=config)
@@ -61,6 +66,8 @@ class EditorBridge(BaseBridge):
             "name": document.source.name,
             "width": image.width,
             "height": image.height,
+            "original_width": document.original.width,
+            "original_height": document.original.height,
             "processed": preview(image),
             "histogram": histogram(image),
             "maps": ["original", *document.maps],
@@ -68,6 +75,16 @@ class EditorBridge(BaseBridge):
             "history": [asdict(step) for step in document.history[: document.cursor]],
             "provenance": document.provenance,
         }
+        catalog, photo = self._workspace.catalog, self._workspace.photo
+        if catalog and photo:
+            session = catalog.sessions.get(photo, Session())
+            snapshot.update(
+                photo=photo,
+                roi=session.roi,
+                view=session.view,
+                results=self._store(photo).list(),
+                dirty=catalog.dirty,
+            )
         if include_original:
             snapshot["original"] = preview(document.original)
         return snapshot
@@ -82,6 +99,10 @@ class EditorBridge(BaseBridge):
                 self._busy = False
                 try:
                     value = future.result()
+                except ModuleNotFoundError as exc:
+                    module = exc.name or "desconhecido"
+                    self.logger.error(f"Dependência ausente durante o processamento: {module}")
+                    self.emit("ocre:result", {"error": f"Dependência ausente: {module}."})
                 except Exception as exc:
                     self.logger.error(f"Operação científica falhou: {type(exc).__name__}")
                     error = str(exc) if isinstance(exc, ValueError) else "Falha no processamento."
@@ -108,6 +129,7 @@ class EditorBridge(BaseBridge):
                 else None,
                 "model": asdict(model.manifest) if model else None,
                 "native_available": self._workspace.native_models.available(),
+                "catalog": self._workspace.catalog.summary() if self._workspace.catalog else None,
             }
 
     def ocre_open(self) -> bool:
@@ -118,7 +140,17 @@ class EditorBridge(BaseBridge):
                 return False
 
             def load() -> dict:
-                self._workspace.document = ImageDocument.open(path)
+                document = ImageDocument.open(path)
+                catalog = self._workspace.catalog
+                if catalog and document.source.resolve().is_relative_to(catalog.root):
+                    key = document.source.resolve().relative_to(catalog.root).as_posix()
+                    if key not in catalog.photos:
+                        catalog.photos = sorted([*catalog.photos, key], key=str.casefold)
+                        catalog.dirty = True
+                    self._workspace.photo = key
+                else:
+                    self._workspace.photo = None
+                self._workspace.document = document
                 return {"document": self._snapshot(include_original=True)}
 
             return self._run(load)
@@ -145,6 +177,7 @@ class EditorBridge(BaseBridge):
         strength: float,
         region: list | str | None,
         device: str,
+        announce: bool = True,
     ) -> None:
         from apps.model_library.kokentau.kokentau_v8 import auto_roi, enhance, rectmask
 
@@ -194,15 +227,18 @@ class EditorBridge(BaseBridge):
         if preset in NEURAL_PRESETS:
             import torch
 
-            self.emit("ocre:progress", {"message": "Carregando Kokentau nativo…"})
+            if announce:
+                self.emit("ocre:progress", {"message": "Carregando ferramentas de realce…"})
             registry = self._workspace.native_models
 
             def execute(requested: str) -> dict:
                 nonlocal model
                 model = registry.model(requested)
-                self.emit(
-                    "ocre:progress", {"message": f"Processando em {model.manifest.device.upper()}…"}
-                )
+                if announce:
+                    self.emit(
+                        "ocre:progress",
+                        {"message": f"Processando em {model.manifest.device.upper()}…"},
+                    )
                 if preset == "adaptativo":
                     return {preset: model.adaptive(pixels, mask)}
                 return model.process(pixels, mask, strength)
@@ -217,7 +253,8 @@ class EditorBridge(BaseBridge):
                 torch.cuda.empty_cache()
                 output = execute("cpu")
         else:
-            self.emit("ocre:progress", {"message": "Calculando mapas estruturais…"})
+            if announce:
+                self.emit("ocre:progress", {"message": "Calculando mapas estruturais…"})
             output = enhance(pixels, mask, forca=0.0)
             output = {name: output[name] for name in STRUCTURAL_PRESETS}
 
@@ -244,7 +281,15 @@ class EditorBridge(BaseBridge):
             document = self._document()
 
             def process() -> dict:
-                self._infer(document, preset, strength, region, device)
+                with self._workspace.inference_lock:
+                    self._infer(document, preset, strength, region, device)
+                photo = self._workspace.photo
+                if photo:
+                    derivative = self._store(photo).save(document, base_only=True)
+                    identifier = derivative["id"]
+                    document.maps[identifier] = document.maps[preset]
+                    document.selected_map = identifier
+                    self._record(document)
                 return {"document": self._snapshot()}
 
             return self._run(process)
@@ -259,6 +304,16 @@ class EditorBridge(BaseBridge):
                     if value != "original" and value not in document.maps:
                         raise ValueError("Mapa indisponível.")
                     document.selected_map = value
+                elif operation == "paste":
+                    if not isinstance(value, list) or len(value) + document.cursor > 64:
+                        raise ValueError("Ajustes copiados excedem o limite do histórico.")
+                    pending = [Adjustment(**item) for item in value]
+                    for step in pending:
+                        step.apply(Image.new("RGB", (1, 1)))
+                    for step in pending:
+                        document.add(step)
+                elif operation == "history" and type(value) is int:
+                    document.cursor = max(0, min(len(document.history), value))
                 elif operation == "undo":
                     document.cursor = max(0, document.cursor - 1)
                 elif operation == "redo":
@@ -268,6 +323,7 @@ class EditorBridge(BaseBridge):
                     document.selected_map = "original"
                 else:
                     document.add(Adjustment(operation, float(value)))
+                self._record(document)
                 return {"document": self._snapshot()}
 
             return self._run(edit)
@@ -275,15 +331,29 @@ class EditorBridge(BaseBridge):
     def ocre_project(self, action: str) -> bool:
         """Save or reopen a versioned .ocre file through native dialogs."""
         with self._state_lock:
-            if action == "save":
-                document = self._document()
-                path = self._file("Projeto Ocre (*.ocre)", save_as="projeto.ocre")
+            if action in {"save", "save-as"}:
+                catalog = self._workspace.catalog
+                document = self._workspace.document
+                if catalog is None and document is None:
+                    raise ValueError("Abra um projeto ou uma fotografia.")
+                path = (
+                    catalog.path
+                    if catalog and catalog.path and action == "save"
+                    else self._file("Projeto Ocre (*.ocre)", save_as="projeto.ocre")
+                )
                 if path is None:
                     return False
 
                 def save() -> dict:
                     if path.suffix.lower() != ".ocre":
                         raise ValueError("Use a extensão .ocre no nome do projeto.")
+                    if catalog is not None:
+                        catalog.save(path)
+                        return {
+                            "catalog": catalog.summary(),
+                            "message": "Projeto salvo.",
+                            "recent": self._remember(catalog),
+                        }
                     if path.resolve() == document.source.resolve():
                         raise ValueError("O projeto não pode sobrescrever a fotografia.")
                     self._workspace.projects.save(path, document)
@@ -297,6 +367,13 @@ class EditorBridge(BaseBridge):
                 return False
 
             def load() -> dict:
+                if path.stat().st_size > 32 * 1024**2:
+                    raise ValueError("O projeto excede o tamanho permitido.")
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if data.get("version") == 2:
+                    catalog = Catalog.open(path, data)
+                    result = self._switch_catalog(catalog)
+                    return {**result, "recent": self._remember(catalog)}
                 document, provenance, selected = self._workspace.projects.open(path)
                 if provenance:
                     hashes = ("grade_sha256", "adaptive_sha256")
@@ -306,18 +383,20 @@ class EditorBridge(BaseBridge):
                             getattr(model.manifest, key) != provenance.get(key) for key in hashes
                         ):
                             raise ValueError("O par nativo não corresponde aos hashes do projeto.")
-                    self._infer(
-                        document,
-                        provenance.get("preset", "combinado"),
-                        provenance["strength"],
-                        provenance["roi"],
-                        "auto",
-                    )
+                    with self._workspace.inference_lock:
+                        self._infer(
+                            document,
+                            provenance.get("preset", "combinado"),
+                            provenance["strength"],
+                            provenance["roi"],
+                            "auto",
+                        )
                 if selected != "original" and selected not in document.maps:
                     raise ValueError("O projeto referencia um mapa indisponível.")
                 document.selected_map = selected
+                state = self._switch_catalog(None)
                 self._workspace.document = document
-                return {"document": self._snapshot(include_original=True)}
+                return {**state, "clear": False, "document": self._snapshot(include_original=True)}
 
             return self._run(load)
 
