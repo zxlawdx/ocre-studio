@@ -1,0 +1,41 @@
+name: Windows inference diagnostic
+on:
+  push:
+    branches: [diagnostic/windows-inference]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inference:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    env:
+      PYTHONUTF8: '1'
+      PYTHONIOENCODING: utf-8
+      OMP_NUM_THREADS: '2'
+      VELA_PRODUCTION: '1'
+      OCRE_REQUIRE_NATIVE: '1'
+      VELA_GUI: edgechromium
+      PYWEBVIEW_GUI: edgechromium
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install runtime only
+        shell: bash
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install -r requirements-torch.txt
+      - name: Reuse previously verified model archives
+        shell: bash
+        run: |
+          gh run download 45925471375 --name verified-kokentau --dir "$RUNNER_TEMP/kokentau"
+          python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json
+          python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target assets/native-models/kokentau
+          python manage.py collectstatic --yes
+      - name: Reproduce failing Windows GUI inference
+        run: python -m tools.smoke_gui --native
