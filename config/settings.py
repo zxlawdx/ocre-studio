@@ -6,7 +6,9 @@ APP_TITLE = "Ocre Studio"
 APP_VERSION = "0.1.0-alpha"
 APP_AUTHOR = "Marinaldo da Costa Barroso Filho"
 APP_DESCRIPTION = "Archaeological Imaging & AI"
-APP_ICON = "assets/icons/ocre-studio.ico" if sys.platform == "win32" else "assets/icons/ocre-studio.png"
+APP_ICON = (
+    "assets/icons/ocre-studio.ico" if sys.platform == "win32" else "assets/icons/ocre-studio.png"
+)
 APP_FILE_EXTENSIONS = [".ocre"]
 ENTRY_ROUTE = "/editor"
 WINDOW_WIDTH = 1440
