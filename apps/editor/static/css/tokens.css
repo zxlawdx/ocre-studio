@@ -3,24 +3,28 @@
 
 /* === PRIMITIVES === */
 :root {
-  --primitive-charcoal: #171613;
-  --primitive-graphite: #211f1a;
-  --primitive-slate: #302c26;
-  --primitive-basalt: #494138;
-  --primitive-chalk: #f1ece4;
-  --primitive-sand: #bfb3a4;
-  --primitive-ochre: #e5a46c;
+  --primitive-charcoal: #151619;
+  --primitive-graphite: #202125;
+  --primitive-slate: #28292e;
+  --primitive-basalt: #3b3d44;
+  --primitive-chalk: #eceaeb;
+  --primitive-sand: #b9b9c2;
+  --primitive-ochre: #d4a77e;
+  --primitive-copper: #543e31;
+  --primitive-rail: #25262b;
 }
 
 /* === SEMANTIC === */
 :root {
-  --canvas: #171613;
-  --panel: #211f1a;
-  --control: #302c26;
-  --line: #494138;
-  --text: #f1ece4;
-  --muted: #bfb3a4;
-  --accent: #e5a46c;
+  --canvas: #151619;
+  --panel: #202125;
+  --control: #28292e;
+  --line: #3b3d44;
+  --text: #eceaeb;
+  --muted: #b9b9c2;
+  --accent: #d4a77e;
+  --selection: #543e31;
+  --rail: #25262b;
 }
 
 /* === COMPONENTS === */

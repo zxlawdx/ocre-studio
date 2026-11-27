@@ -1,118 +1,238 @@
 <link rel="stylesheet" href="{{ static('editor/css/tokens.css') }}">
 <link rel="stylesheet" href="{{ static('editor/css/studio.css') }}">
+<link rel="stylesheet" href="{{ static('editor/css/workspace.css') }}">
 <section class="ocre workspace" id="ocre-editor">
     <header class="top">
-        <a href="/home" data-vela-link data-vela-route="/home" class="wordmark">
-            <img src="{{ static('editor/mark.svg') }}" width="28" height="28" alt="">
+        <a href="/home" data-vela-link class="wordmark">
+            <img src="{{ static('editor/mark.svg') }}" width="25" height="25" alt="">
             Ocre Studio
         </a>
-        <nav aria-label="Arquivo">
-            <button data-action="open">Importar foto</button>
-            <button data-action="open-project">Abrir projeto</button>
-            <button data-action="save-project" data-document>Salvar projeto</button>
+        <nav class="menubar" aria-label="Menu principal">
+            <details><summary>Arquivo</summary><div class="popup">
+                <button data-action="new" title="Ctrl+N">Novo projeto</button>
+                <button data-action="folder" title="Ctrl+Shift+O">Abrir pasta como projeto</button>
+                <button data-action="open-project">Abrir projeto</button>
+                <button data-action="open" title="Ctrl+O">Importar fotografia</button>
+                <button data-action="save-project" title="Ctrl+S">Salvar projeto</button>
+                <button data-action="save-as" title="Ctrl+Shift+S">Salvar como</button>
+                <button data-action="close-project">Fechar projeto</button>
+            </div></details>
+            <details><summary>Editar</summary><div class="popup">
+                <button data-action="undo" data-document title="Ctrl+Z">Desfazer</button>
+                <button data-action="redo" data-document title="Ctrl+Y">Refazer</button>
+                <button data-action="copy-adjustments" data-document>Copiar ajustes</button>
+                <button data-action="paste-adjustments" data-document>Colar ajustes</button>
+            </div></details>
+            <details><summary>Imagem</summary><div class="popup">
+                <button data-action="reset" data-document>Restaurar original</button>
+                <button data-action="export" data-document>Exportar</button>
+                <button data-action="close-tab" title="Ctrl+W">Fechar aba</button>
+                <button data-action="close-others">Fechar outras abas</button>
+            </div></details>
+            <details><summary>Processamento</summary><div class="popup">
+                <button data-action="infer" data-document>Aplicar realce</button>
+                <button data-panel="batch">Processamento em lote</button>
+            </div></details>
+            <details><summary>Exibir</summary><div class="popup">
+                <button data-view="fit">Ajustar à tela</button>
+                <button data-view="actual">Zoom 100%</button>
+                <button data-action="toggle-explorer">Recolher ou mostrar explorador</button>
+                <button data-action="toggle-inspector">Recolher ou mostrar ferramentas</button>
+                <button data-action="toggle-gallery">Recolher ou mostrar galeria</button>
+            </div></details>
+            <details><summary>Ajuda</summary><div class="popup">
+                <button data-action="help">Atalhos e limites científicos</button>
+            </div></details>
         </nav>
         <button class="primary" data-action="export" data-document>Exportar</button>
     </header>
-    <aside class="browser" aria-label="Fotografia e histórico">
-        <h2>Fotografia</h2>
-        <figure id="source-card" hidden>
-            <img id="thumbnail" alt="">
-            <figcaption id="filename"></figcaption>
-        </figure>
-        <p class="muted" id="empty-library">Nenhuma fotografia aberta.</p>
-        <h2>Histórico de ajustes</h2>
-        <div class="commands">
-            <button data-action="undo" data-document>Desfazer</button>
-            <button data-action="redo" data-document>Refazer</button>
+    <nav class="workspaces" aria-label="Área de trabalho">
+        <button data-panel="projects">Projetos</button>
+        <button data-panel="editor" aria-current="page">Editor</button>
+        <button data-panel="batch">Processamento em lote</button>
+    </nav>
+    <aside class="browser" aria-label="Explorador de fotografias">
+        <div class="section-title"><h2>Explorador</h2><button data-action="folder" aria-label="Abrir pasta" title="Abrir pasta">＋</button></div>
+        <p id="project-heading" class="project-name">Sem projeto</p>
+        <input id="photo-search" type="search" placeholder="Pesquisar fotografias" aria-label="Pesquisar fotografias">
+        <div id="explorer" tabindex="0" role="group" aria-label="Catálogo de fotografias"></div>
+        <div id="catalog-context" class="catalog-context" hidden>
+            <button data-action="context-open">Abrir em aba</button>
+            <button data-action="context-batch">Processar seleção</button>
+            <button data-action="context-results">Mostrar resultados</button>
         </div>
-        <ol id="history"></ol>
+        <div class="catalog-footer">
+            <span id="selection-count">Nenhuma fotografia selecionada</span>
+            <button data-panel="batch">Processar seleção</button>
+        </div>
+        <details class="history-panel">
+            <summary>Histórico da fotografia</summary>
+            <div class="commands">
+                <button data-action="undo" data-document>Desfazer</button>
+                <button data-action="redo" data-document>Refazer</button>
+            </div>
+            <ol id="history"></ol>
+        </details>
     </aside>
-    <main class="viewer" aria-label="Visualização">
+    <div class="splitter" data-resize="left" role="separator" tabindex="0" aria-label="Redimensionar explorador" aria-orientation="vertical" aria-valuemin="160" aria-valuemax="460" aria-valuenow="240"></div>
+    <main class="viewer" data-screen="editor" aria-label="Visualização">
+        <div id="tabs" class="document-tabs" role="group" aria-label="Fotografias abertas"></div>
         <div class="toolbar">
-            <button data-view="fit">Ajustar</button>
-            <button data-view="actual">1:1 da prévia</button>
-            <button data-view="out" aria-label="Diminuir zoom">−</button>
-            <button data-view="in" aria-label="Aumentar zoom">+</button>
-            <button data-view="pan" aria-pressed="true">Mover</button>
-            <button data-view="roi" aria-pressed="false">Selecionar ROI</button>
-            <button data-view="clear-roi">Limpar ROI</button>
+            <button data-view="pan" aria-pressed="true" title="Mover imagem (M)">Mover</button>
+            <button data-view="out" aria-label="Diminuir zoom" title="Diminuir zoom">−</button>
+            <button data-view="in" aria-label="Aumentar zoom" title="Aumentar zoom">+</button>
+            <button data-view="roi" aria-pressed="false" title="Selecionar região (R)">Selecionar região</button>
+            <button data-view="clear-roi" title="Limpar seleção (Esc)">Limpar</button>
+            <div class="comparison-modes" role="group" aria-label="Imagem exibida">
+                <button data-comparison="original" aria-pressed="false">Original</button>
+                <button data-comparison="wipe" aria-pressed="true">Comparar</button>
+                <button data-comparison="result" aria-pressed="false">Resultado</button>
+            </div>
+            <button data-view="fit" title="Ajustar à tela (0)">Ajustar à tela</button>
         </div>
         <div class="viewport">
-            <canvas id="photograph" aria-label="Prévia da fotografia"></canvas>
+            <canvas id="photograph" tabindex="0" aria-label="Fotografia. Esc limpa a seleção."></canvas>
+            <canvas id="region-overlay" aria-hidden="true"></canvas>
             <div class="placeholder" id="placeholder">
-                <img src="{{ static('editor/mark.svg') }}" alt="" width="54" height="54">
+                <img src="{{ static('editor/mark.svg') }}" alt="" width="48" height="48">
                 <p>Abra uma fotografia para começar</p>
-                <button class="primary" data-action="open">Importar fotografia</button>
+                <button data-action="open">Importar fotografia</button>
             </div>
         </div>
-        <div class="compare">
-            <span>Original</span>
-            <input id="comparison" type="range" min="0" max="100" value="50" aria-label="Divisor original e processado">
-            <span>Processado</span>
+        <div class="compare" id="comparison-bar" hidden>
+            <span id="before-label">Original</span>
+            <input id="comparison" type="range" min="0" max="100" value="50" aria-label="Posição do divisor sobre a imagem">
+            <span>Resultado</span>
         </div>
+        <div class="filmstrip-header"><span id="filename">Galeria</span><button data-action="toggle-gallery">Recolher galeria</button></div>
+        <div id="gallery" class="filmstrip" aria-label="Galeria de fotografias"></div>
     </main>
-    <aside class="inspector" aria-label="Processamento">
-        <h2>Histograma RGB</h2>
-        <canvas id="histogram" width="252" height="76" aria-label="Histograma RGB da imagem processada"></canvas>
-        <p class="channels"><span>R · vermelho</span><span>G · verde</span><span>B · azul</span></p>
-        <h2>Ferramentas Kokentau</h2>
-        <label>Técnica
-            <select id="preset">
-                <optgroup label="Neural">
-                    <option value="adaptativo">Adaptativo V7</option>
-                </optgroup>
-                <optgroup label="Análise arqueológica">
-                    <option value="cromatico">Cromático V8.2 · híbrido</option>
-                    <option value="combinado" selected>Combinado V8.2 · híbrido</option>
-                    <option value="estrutural">Estrutural</option>
-                    <option value="suporte_estrutural">Suporte estrutural</option>
-                    <option value="roi">Máscara de ROI</option>
-                </optgroup>
-                <optgroup label="Processamento digital clássico">
-                    <option value="blackhat">Black Hat</option>
-                    <option value="tophat">Top Hat</option>
-                    <option value="hessiana_escura">Hessiana escura</option>
-                    <option value="hessiana_clara">Hessiana clara</option>
-                    <option value="gabor">Gabor</option>
-                </optgroup>
-            </select>
-        </label>
-        <label>Dispositivo
-            <select id="device"><option value="auto">Automático</option><option value="cpu">CPU</option><option value="cuda">CUDA</option></select>
-        </label>
-        <p class="muted" id="model-state" role="status">Verificando recursos nativos…</p>
-        <label>Região de interesse
-            <select id="region">
-                <option value="selection">Seleção do canvas</option>
-                <option value="full">Fotografia inteira</option>
-                <option value="auto">Proposta automática experimental</option>
-                <option value="saved">ROI histórica do pacote</option>
-            </select>
-        </label>
-        <label>Intensidade <input type="range" id="strength" min="0" max="1" value="0.85" step="0.01"></label>
-        <button class="primary" data-action="infer" data-document>Processar</button>
-        <label>Mapa <select id="maps" data-document><option value="original">Original</option></select></label>
-        <p class="muted">O realce é exploratório. Pigmentos exigem confirmação independente.</p>
-        <h2>Ajustes clássicos</h2>
-        <label>Operação
-            <select id="adjustment">
-                <option value="brightness">Brilho</option><option value="contrast">Contraste</option>
-                <option value="saturation">Saturação</option><option value="sharpness">Nitidez</option>
-                <option value="gamma">Gama</option><option value="channel">Canal RGB</option>
-                <option value="equalize">Equalização</option>
-            </select>
-        </label>
-        <label>Valor <input id="adjustment-value" type="number" value="1" step="0.1"></label>
+    <section class="workspace-page" data-screen="projects" hidden>
+        <h1>Projetos</h1>
         <div class="commands">
-            <button data-action="adjust" data-document>Aplicar</button>
-            <button data-action="reset" data-document>Restaurar</button>
+            <button class="primary" data-action="folder">Abrir pasta como projeto</button>
+            <button data-action="new">Novo projeto</button>
+            <button data-action="open-project">Abrir projeto salvo</button>
         </div>
+        <div id="project-summary" class="workspace-section" hidden>
+            <h2 id="project-title"></h2><p id="project-location"></p><p id="project-details"></p>
+            <div class="commands">
+                <button data-action="refresh">Atualizar pasta</button>
+                <button data-action="destination">Escolher pasta de resultados</button>
+                <button data-action="save-project">Salvar projeto</button>
+                <button data-action="close-project">Fechar projeto</button>
+            </div>
+        </div>
+        <section class="workspace-section"><h2>Projetos recentes</h2><div id="recent-projects"></div></section>
+    </section>
+    <section class="workspace-page" data-screen="batch" hidden>
+        <h1>Processamento em lote</h1>
+        <form id="batch-form" class="workspace-section">
+            <div class="batch-options">
+                <label>Fotografias <select name="scope">
+                    <option value="selection">Seleção do explorador</option>
+                    <option value="current">Fotografia atual</option>
+                    <option value="all">Projeto inteiro</option>
+                </select></label>
+                <label>Área <select name="region">
+                    <option value="full">Imagem inteira</option>
+                    <option value="individual">Áreas individuais (ignorar sem seleção)</option>
+                    <option value="auto">Sugerir região</option>
+                </select></label>
+            </div>
+            <fieldset class="batch-methods"><legend>Técnicas</legend><div id="batch-methods"></div></fieldset>
+            <details><summary>Formato, resolução e intensidade</summary><div class="batch-options">
+                <label>Formato <select name="format"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="tiff">TIFF</option></select></label>
+                <label>Lado máximo em px <input name="max_side" type="number" min="0" max="10000" value="0" title="Zero mantém a resolução original"></label>
+                <label>Qualidade JPEG <input name="quality" type="number" min="1" max="100" value="92"></label>
+                <label>Intensidade (%) <input name="strength" type="number" min="0" max="100" value="85"></label>
+            </div></details>
+            <button class="primary" type="submit" id="start-batch">Iniciar lote</button>
+        </form>
+        <div class="queue-heading"><h2 id="queue-status">Fila de processamento</h2>
+            <div class="commands">
+                <button data-batch="pause">Pausar após tarefa atual</button>
+                <button data-batch="resume">Retomar</button>
+                <button data-batch="cancel">Cancelar pendentes</button>
+                <button data-batch="retry">Reprocessar falhas</button>
+            </div>
+        </div>
+        <progress id="queue-progress" value="0" max="1"></progress>
+        <div class="queue-table"><table><thead><tr><th>Fotografia</th><th>Técnica</th><th>Estado</th><th>Tempo</th><th></th></tr></thead><tbody id="queue"></tbody></table></div>
+    </section>
+    <div class="splitter" data-resize="right" role="separator" tabindex="0" aria-label="Redimensionar ferramentas" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="540" aria-valuenow="320"></div>
+    <aside class="inspector" aria-label="Ferramentas de imagem">
+        <details open><summary>Histograma RGB</summary>
+            <canvas id="histogram" width="252" height="76" aria-label="Distribuição de intensidade RGB do resultado ativo"></canvas>
+            <div class="channels" id="histogram-channels">
+                <label><input type="checkbox" value="0" checked> R</label>
+                <label><input type="checkbox" value="1" checked> G</label>
+                <label><input type="checkbox" value="2" checked> B</label>
+                <span>Resultado ativo</span>
+            </div>
+        </details>
+        <h2>Realce arqueológico</h2>
+        <fieldset id="primary-techniques" class="techniques"><legend class="sr-only">Técnica de realce</legend></fieldset>
+        <label class="slider-row" for="strength">Intensidade <output id="strength-value">85%</output></label>
+        <input type="range" id="strength" min="0" max="1" value="0.85" step="0.01">
+        <div class="region-label" id="region-label" aria-live="polite">Área · imagem inteira</div>
+        <button class="primary apply-button" data-action="infer" data-document>Aplicar realce</button>
+        <details><summary>Análise de estruturas</summary>
+            <div id="structural-techniques" class="techniques"></div>
+        </details>
+        <details><summary>Ajustes de imagem</summary>
+            <div id="adjustments"></div>
+            <button data-action="reset" data-document>Restaurar original</button>
+        </details>
+        <details><summary>Análise avançada</summary>
+            <label>Área de processamento
+                <select id="region">
+                    <option value="selection">Seleção, quando presente</option><option value="full">Imagem inteira</option>
+                    <option value="auto">Sugerir região</option><option value="saved">Região de referência</option>
+                </select>
+            </label>
+            <div class="commands"><button data-adjust="equalize:1" data-document>Equalizar</button>
+                <button data-adjust="channel:0" data-document>Canal R</button>
+                <button data-adjust="channel:1" data-document>Canal G</button>
+                <button data-adjust="channel:2" data-document>Canal B</button></div>
+            <label>Presets <select id="presets"></select></label>
+            <div class="commands"><button data-action="save-preset">Salvar preset</button><button data-action="remove-preset">Remover</button></div>
+        </details>
+        <details open><summary>Resultados</summary>
+            <label class="sr-only" for="maps">Resultado ou mapa ativo</label>
+            <select id="maps" data-document><option value="original">Original</option></select>
+            <div id="result-list"></div>
+        </details>
+        <details><summary>Detalhes técnicos</summary>
+            <label>Dispositivo
+                <select id="device"><option value="auto">Automático</option><option value="cpu">CPU</option><option value="cuda">CUDA</option></select>
+            </label>
+            <p id="model-state" class="muted"></p>
+            <pre id="provenance"></pre>
+            <p class="muted">Realces exploratórios. Diferenças de cor e textura exigem confirmação independente.</p>
+        </details>
     </aside>
     <footer>
         <span id="status" role="status" aria-live="polite">Pronto</span>
-        <span id="dimensions"></span>
-        <span id="scale">—</span>
+        <span id="project-status">Sem projeto</span><span id="dimensions"></span><span id="scale">—</span>
     </footer>
+    <dialog id="new-project">
+        <form method="dialog"><h2>Novo projeto</h2>
+            <label>Nome <input name="name" required maxlength="120"></label>
+            <label><input type="checkbox" name="recursive" checked> Incluir subpastas</label>
+            <details><summary>Dados da pesquisa</summary>
+                <label>Sítio <input name="site"></label><label>Painel ou setor <input name="panel"></label>
+                <label>Responsável <input name="researcher"></label><label>Observações <textarea name="notes"></textarea></label>
+            </details>
+            <div class="commands"><button value="cancel" formnovalidate>Cancelar</button><button class="primary" value="confirm">Escolher pasta e criar</button></div>
+        </form>
+    </dialog>
+    <dialog id="help"><form method="dialog"><h2>Atalhos e limites científicos</h2>
+        <p><kbd>Ctrl+O</kbd> Importar · <kbd>Ctrl+S</kbd> Salvar · <kbd>Ctrl+W</kbd> Fechar aba</p>
+        <p><kbd>R</kbd> Selecionar região · <kbd>M</kbd> Mover · <kbd>Esc</kbd> Limpar · <kbd>0</kbd> Ajustar</p>
+        <p>O realce visual auxilia a inspeção. Ele não confirma pigmentos, autenticidade ou profundidade.</p>
+        <button>Fechar</button>
+    </form></dialog>
 </section>
 <script>
     (() => {

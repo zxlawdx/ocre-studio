@@ -1,8 +1,13 @@
+import { canvasRegion, changeRegion, drawRegion, regionTarget, toImage } from "./region.js";
+
 /** Synchronized photographic previews and a native-pixel region selection. */
 export class Viewport {
     constructor(canvas, update, signal) {
         this.canvas = canvas;
         this.context = canvas.getContext("2d");
+        this.overlay = canvas.parentElement.querySelector("#region-overlay");
+        this.overlayContext = this.overlay.getContext("2d");
+        this.comparison = "wipe";
         this.update = update;
         this.zoom = 1;
         this.pan = [0, 0];
@@ -15,9 +20,15 @@ export class Viewport {
         signal.addEventListener("abort", () => observer.disconnect(), { once: true });
         canvas.addEventListener("pointerdown", (event) => this.begin(event), { signal });
         canvas.addEventListener("pointermove", (event) => this.move(event), { signal });
-        for (const name of ["pointerup", "pointercancel"]) {
-            canvas.addEventListener(name, () => { this.drag = null; }, { signal });
-        }
+        canvas.addEventListener("pointerup", () => this.finish(), { signal });
+        canvas.addEventListener("pointercancel", () => this.cancel(), { signal });
+        canvas.addEventListener("lostpointercapture", () => this.finish(), { signal });
+        canvas.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                event.preventDefault();
+                this.cancel();
+            }
+        }, { signal });
         canvas.addEventListener("wheel", (event) => {
             event.preventDefault();
             this.changeZoom(event.deltaY < 0 ? 1.15 : 1 / 1.15);
@@ -35,11 +46,17 @@ export class Viewport {
             return image;
         }));
         if (signal.aborted) return;
-        this.dimensions = [document.width, document.height];
+        this.dimensions = [document.original_width ?? document.width, document.original_height ?? document.height];
         this.images = images;
         if (replacing) {
-            this.roi = document.provenance?.roi ?? null;
-            this.fit();
+            this.roi = Array.isArray(document.roi) ? document.roi : null;
+            if (typeof document.view?.zoom === "number" && Array.isArray(document.view.pan)) {
+                this.zoom = document.view.zoom;
+                this.pan = document.view.pan;
+                this.draw();
+            } else {
+                this.fit();
+            }
         } else {
             this.draw();
         }
@@ -75,67 +92,110 @@ export class Viewport {
 
     draw() {
         const ratio = window.devicePixelRatio || 1;
-        this.canvas.width = Math.round(this.canvas.clientWidth * ratio);
-        this.canvas.height = Math.round(this.canvas.clientHeight * ratio);
+        for (const layer of [this.canvas, this.overlay]) {
+            const width = Math.round(this.canvas.clientWidth * ratio);
+            const height = Math.round(this.canvas.clientHeight * ratio);
+            if (layer.width !== width) layer.width = width;
+            if (layer.height !== height) layer.height = height;
+        }
+        for (const context of [this.context, this.overlayContext]) {
+            context.setTransform(ratio, 0, 0, ratio, 0, 0);
+            context.clearRect(0, 0, this.canvas.clientWidth, this.canvas.clientHeight);
+        }
         if (!this.images.length) return;
         const ctx = this.context;
-        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-        const [x, y, width, height] = this.bounds();
+        const bounds = this.bounds();
+        const [x, y, width, height] = bounds;
         const split = x + width * this.divider;
-        ctx.drawImage(this.images[0], x, y, width, height);
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(split, y, width * (1 - this.divider), height);
-        ctx.clip();
-        ctx.drawImage(this.images[1], x, y, width, height);
-        ctx.restore();
-        if (this.divider > 0 && this.divider < 1) {
-            ctx.fillStyle = "#f1ece4";
-            ctx.fillRect(split, y, 1, height);
+        ctx.drawImage(this.images[this.comparison === "result" ? 1 : 0], ...bounds);
+        if (this.comparison === "wipe") {
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(split, y, width * (1 - this.divider), height);
+            ctx.clip();
+            ctx.drawImage(this.images[1], ...bounds);
+            ctx.restore();
+            if (this.divider > 0 && this.divider < 1) {
+                ctx.fillStyle = "#18191b";
+                ctx.fillRect(split - 2, y, 4, height);
+                ctx.fillStyle = "#faf8f3";
+                ctx.fillRect(split - 1, y, 2, height);
+                ctx.fillRect(split - 10, y + height / 2 - 8, 20, 16);
+                ctx.fillStyle = "#232426";
+                ctx.textAlign = "center";
+                ctx.fillText("↔", split, y + height / 2 + 4);
+            }
         }
-        if (this.roi) {
-            const [left, top, right, bottom] = this.roi;
-            const horizontal = width / this.dimensions[0];
-            const vertical = height / this.dimensions[1];
-            ctx.strokeStyle = "#e5a46c";
-            ctx.setLineDash([5, 4]);
-            ctx.strokeRect(
-                x + left * horizontal, y + top * vertical,
-                (right - left) * horizontal, (bottom - top) * vertical
-            );
-        }
-        this.update(Math.round(this.zoom * 100));
+        if (this.roi) drawRegion(this.overlayContext, this.roi, bounds, this.dimensions);
+        this.update(Math.round(this.zoom * this.images[0].width / this.dimensions[0] * 100));
     }
 
-    imagePoint(event) {
-        const [left, top, width, height] = this.bounds();
-        const normalized = [(event.offsetX - left) / width, (event.offsetY - top) / height];
-        return normalized.map((value, axis) =>
-            Math.round(Math.max(0, Math.min(1, value)) * this.dimensions[axis])
-        );
+    point(event) {
+        const rect = this.canvas.getBoundingClientRect();
+        return [event.clientX - rect.left, event.clientY - rect.top];
+    }
+
+    target(point) {
+        if (!this.images.length) return null;
+        const [x, y, width, height] = this.bounds();
+        if (this.mode === "roi") {
+            return this.roi ? regionTarget(point, canvasRegion(this.roi, this.bounds(), this.dimensions)) : null;
+        }
+        if (this.comparison === "wipe" && Math.abs(point[0] - x - width * this.divider) <= 9 &&
+            point[1] >= y && point[1] <= y + height) return "divider";
+        return null;
     }
 
     begin(event) {
-        if (!this.images.length || event.button !== 0) return;
+        if (!this.images.length || event.button !== 0 || this.drag) return;
+        const pointer = this.point(event);
+        const handle = this.target(pointer);
+        const [x, y, width, height] = this.bounds();
+        if (this.mode === "roi" && !handle &&
+            (pointer[0] < x || pointer[0] > x + width || pointer[1] < y || pointer[1] > y + height)) return;
         this.canvas.setPointerCapture(event.pointerId);
-        this.drag = { pointer: [event.clientX, event.clientY], point: this.imagePoint(event) };
+        this.drag = {
+            id: event.pointerId, pointer, handle,
+            point: toImage(pointer, this.bounds(), this.dimensions),
+            region: handle ? this.roi : null, previous: this.roi, mode: this.mode
+        };
     }
 
     move(event) {
-        if (!this.drag) return;
-        if (this.mode === "pan") {
-            const pointer = [event.clientX, event.clientY];
+        const pointer = this.point(event);
+        if (!this.drag) {
+            const target = this.target(pointer);
+            this.canvas.style.cursor = target === "divider" ? "col-resize" :
+                target === "move" ? "move" : target ? `${target}-resize` :
+                    this.mode === "roi" ? "crosshair" : "grab";
+            return;
+        }
+        if (event.pointerId !== this.drag.id) return;
+        if (this.drag.handle === "divider") {
+            const [x, , width] = this.bounds();
+            this.divider = Math.max(0.02, Math.min(0.98, (pointer[0] - x) / width));
+        } else if (this.drag.mode === "pan") {
             this.pan = this.pan.map((value, axis) => value + pointer[axis] - this.drag.pointer[axis]);
             this.drag.pointer = pointer;
         } else {
-            const [startX, startY] = this.drag.point;
-            const [endX, endY] = this.imagePoint(event);
-            if (startX === endX || startY === endY) return;
-            this.roi = [
-                Math.min(startX, endX), Math.min(startY, endY),
-                Math.max(startX, endX), Math.max(startY, endY)
-            ];
+            const region = changeRegion(this.drag, toImage(pointer, this.bounds(), this.dimensions), this.dimensions);
+            if (region) this.roi = region;
         }
         this.draw();
+    }
+
+    finish() {
+        if (!this.drag) return;
+        const changed = this.drag.mode === "roi" && this.roi !== this.drag.previous;
+        this.drag = null;
+        if (changed) this.onRegion?.(this.roi);
+    }
+
+    cancel() {
+        const previous = this.drag ? this.drag.previous : null;
+        this.drag = null;
+        this.roi = previous;
+        this.draw();
+        this.onRegion?.(this.roi);
     }
 }
