@@ -116,7 +116,7 @@ class EditorBridge(CatalogCommands, BaseBridge):
                         "ocre:result", {"error": "Sem permissão para acessar o arquivo ou a pasta."}
                     )
                 except Exception as exc:
-                    self.logger.error(f"Operação científica falhou: {type(exc).__name__}")
+                    self.logger.exception(f"Operação científica falhou: {type(exc).__name__}")
                     error = str(exc) if isinstance(exc, ValueError) else "Falha no processamento."
                     self.emit("ocre:result", {"error": error})
                 else:
@@ -331,7 +331,7 @@ class EditorBridge(CatalogCommands, BaseBridge):
                 payload["message"] = (
                     str(error) if isinstance(error, ValueError) else "Falha ao aplicar realce."
                 )
-                self.logger.error(f"Processamento da fotografia falhou: {type(error).__name__}")
+                self.logger.exception(f"Processamento da fotografia falhou: {type(error).__name__}")
             else:
                 payload["state"] = "done" if entry else "cancelled"
                 if entry:
