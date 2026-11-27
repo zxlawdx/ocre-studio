@@ -8,6 +8,7 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 from apps.model_library.native import V7_PAYLOAD, NativeModelRegistry
+from apps.model_library.service import MAX_ENTRY, V7_FILES, V8_FILES
 from tools.release_artifacts import digest
 
 TAG = "kokentau-v8.2-models"
@@ -55,6 +56,31 @@ def build(out: Path) -> None:
     )
 
 
+def recover(bundle: Path, out: Path, manifest: Path) -> None:
+    """Recover only authorized model files from a previously published bundle."""
+    out.mkdir(parents=True, exist_ok=True)
+    with ZipFile(bundle) as archive:
+        for version, names, destination in (
+            ("v7", V7_FILES, WEIGHTS),
+            ("v8", V8_FILES, METADATA),
+        ):
+            payload = {}
+            for name in sorted(names):
+                suffix = f"assets/native-models/kokentau/{version}/{name}"
+                matches = [entry for entry in archive.infolist() if entry.filename.endswith(suffix)]
+                if len(matches) != 1 or matches[0].file_size > MAX_ENTRY:
+                    raise ValueError(f"Missing or ambiguous authorized model entry: {suffix}")
+                payload[name] = archive.read(matches[0])
+            if version == "v7":
+                import hashlib
+
+                for name, expected in V7_PAYLOAD.items():
+                    if hashlib.sha256(payload[name]).hexdigest() != expected:
+                        raise ValueError(f"Invalid checkpoint: {name}")
+            make_zip(out / destination, payload)
+    verify(out, manifest)
+
+
 def verify(directory: Path, manifest: Path) -> None:
     """Compare downloaded ZIPs against the hashes in the source revision."""
     spec = json.loads(manifest.read_text(encoding="utf-8"))
@@ -67,8 +93,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("directory", type=Path)
     parser.add_argument("--verify", type=Path)
+    parser.add_argument("--recover-bundle", type=Path)
     options = parser.parse_args()
-    if options.verify is None:
+    if options.recover_bundle is not None:
+        if options.verify is None:
+            parser.error("--recover-bundle requires --verify")
+        recover(options.recover_bundle, options.directory, options.verify)
+    elif options.verify is None:
         build(options.directory)
     else:
         verify(options.directory, options.verify)
