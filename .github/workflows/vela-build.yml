@@ -45,7 +45,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release download "$KOKENTAU_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'kokentau-*.zip' --dir "$RUNNER_TEMP/kokentau"
+          if ! gh release download "$KOKENTAU_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'kokentau-*.zip' --dir "$RUNNER_TEMP/kokentau"; then
+            gh release download v0.1.0-alpha --repo "$GITHUB_REPOSITORY" --pattern 'Ocre-Studio-linux-*.zip' --dir "$RUNNER_TEMP/previous"
+            python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json --recover-bundle "$RUNNER_TEMP/previous/Ocre-Studio-linux-x86_64-0.1.0-alpha.zip"
+          fi
           python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json
           python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target assets/native-models/kokentau
       - run: |
@@ -110,7 +113,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release download "$KOKENTAU_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'kokentau-*.zip' --dir "$RUNNER_TEMP/kokentau"
+          if ! gh release download "$KOKENTAU_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'kokentau-*.zip' --dir "$RUNNER_TEMP/kokentau"; then
+            gh release download v0.1.0-alpha --repo "$GITHUB_REPOSITORY" --pattern 'Ocre-Studio-linux-*.zip' --dir "$RUNNER_TEMP/previous"
+            python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json --recover-bundle "$RUNNER_TEMP/previous/Ocre-Studio-linux-x86_64-0.1.0-alpha.zip"
+          fi
           python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json
           python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target assets/native-models/kokentau
       - name: Expose GTK bindings after installing pinned Python dependencies
@@ -183,7 +189,7 @@ jobs:
           if-no-files-found: error
   release:
     needs: [ci, build]
-    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.republish)
+    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.republish) || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[republish-alpha]'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -198,14 +204,15 @@ jobs:
         run: |
           python -m tools.release_artifacts release/ocre-linux linux --verify
           python -m tools.release_artifacts release/ocre-windows windows --verify
-          python -c 'from config.settings import APP_VERSION; import os,re; tag=f"v{APP_VERSION}" if os.environ["GITHUB_EVENT_NAME"]=="workflow_dispatch" else os.environ["GITHUB_REF_NAME"]; assert re.fullmatch(r"v\d+\.\d+\.\d+(?:-(?:alpha|beta)(?:\.\d+)?)?",tag) and tag == f"v{APP_VERSION}"'
+          python -c 'from config.settings import APP_VERSION; import os,re; tag=os.environ["GITHUB_REF_NAME"] if os.environ["GITHUB_REF_TYPE"]=="tag" else f"v{APP_VERSION}"; assert re.fullmatch(r"v\d+\.\d+\.\d+(?:-(?:alpha|beta)(?:\.\d+)?)?",tag) and tag == f"v{APP_VERSION}"'
       - name: Publish verified artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+          if [[ "$GITHUB_REF_TYPE" != tag ]]; then
             tag=$(python -c 'from config.settings import APP_VERSION; print("v"+APP_VERSION)')
             gh release upload "$tag" release/ocre-*/* --clobber
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$tag" -f sha="$GITHUB_SHA" -F force=true
             exit 0
           fi
           flags=()
