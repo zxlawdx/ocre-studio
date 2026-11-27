@@ -65,9 +65,49 @@
 .workspace .inspector details:first-child { border-top: 0; }
 .workspace .inspector summary { padding: 3px 0; font-weight: 625; }
 .workspace .inspector #histogram { margin-top: 6px; height: 74px; }
-.workspace .channels { align-items: center; }
-.workspace .channels label { display: flex; margin: 0; align-items: center; }
-.workspace .channels span { margin-left: auto; }
+.workspace .histogram-channels {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    column-gap: var(--choice-gap);
+    border: 0;
+    min-inline-size: 0;
+    padding: 0;
+    margin: 0;
+}
+
+.workspace label.choice {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--choice-gap);
+    min-block-size: var(--choice-target);
+    margin: 0;
+    cursor: pointer;
+}
+
+.workspace .choice-input {
+    flex: 0 0 var(--choice-size);
+    inline-size: var(--choice-size);
+    block-size: var(--choice-size);
+    margin: 0;
+    accent-color: var(--choice-color, var(--accent));
+}
+
+.workspace .histogram-channels .choice {
+    font-size: 0.75rem;
+    white-space: nowrap;
+    color: var(--choice-color);
+}
+
+.workspace [data-channel="red"] { --choice-color: var(--channel-red); }
+.workspace [data-channel="green"] { --choice-color: var(--channel-green); }
+.workspace [data-channel="blue"] { --choice-color: var(--channel-blue); }
+.workspace .histogram-source {
+    color: var(--muted);
+    font-size: 0.6875rem;
+    margin: 0;
+}
 .workspace .techniques { display: grid; gap: 4px; border: 0; padding: 0; margin: 0 0 8px; min-width: 0; }
 .workspace .techniques label { display: flex; align-items: center; min-height: 31px; padding: 3px 7px; background: var(--control); border-radius: 3px; margin: 0; cursor: pointer; }
 .workspace .techniques label:has(:checked) { background: var(--selection); color: #f1d4b9; }
@@ -85,7 +125,7 @@
 .workspace dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); min-width: 330px; max-width: min(580px, 90vw); }
 .workspace dialog::backdrop { background: #0009; }
 .workspace dialog label { display: grid; margin: 7px 0; }
-.workspace dialog label:has(input[type="checkbox"]) { display: flex; gap: 5px; }
+.workspace dialog label.choice { display: inline-flex; margin: 0; }
 .workspace .batch-options, .workspace #batch-methods { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; }
 .workspace .batch-options label { display: grid; gap: 3px; }
 .workspace .batch-methods { border: 1px solid var(--line); margin: 8px 0; }
@@ -105,7 +145,6 @@
 @media (max-width: 1050px) { .workspace { --left: 185px; --right: 255px; } .workspace .toolbar { gap: 3px; } }
 .workspace .catalog-context[hidden] { display: none; }
 .workspace .menubar details:not([open]) > .popup { display: none; }
-.workspace .inspector [type="checkbox"] { accent-color: var(--accent); }
 .workspace .photo-row[aria-current] { background: var(--control); }
 .workspace .photo-row[aria-current][aria-pressed="true"] { background: var(--selection); }
 .workspace .recent-project { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px; margin-top: 7px; }

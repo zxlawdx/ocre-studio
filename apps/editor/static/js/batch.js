@@ -16,10 +16,10 @@ export class BatchView {
         this.form = root.querySelector("#batch-form");
         const methods = root.querySelector("#batch-methods");
         for (const [key, [name, help]] of Object.entries(techniques)) {
-            const label = element("label", "", { title: help });
-            const input = element("input", "", { type: "checkbox", name: "method", value: key });
+            const label = element("label", "", { class: "choice", title: help });
+            const input = element("input", "", { type: "checkbox", class: "choice-input", name: "method", value: key });
             input.checked = key === "combinado";
-            label.append(input, document.createTextNode(name));
+            label.append(input, element("span", name));
             methods.append(label);
         }
         this.form.querySelector("#batch-preset").addEventListener("change", (event) => {

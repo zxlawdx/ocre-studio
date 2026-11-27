@@ -31,6 +31,41 @@ def capture(path: Path) -> None:
     subprocess.run(["import", "-window", "Ocre Studio", str(path)], check=True, timeout=15)
 
 
+def exercise_histogram(window, screenshot: Path | None) -> None:
+    """Check channel geometry and pixel redraw at reduced and default panel widths."""
+    window.evaluate_js("document.querySelector('.workspace').style.setProperty('--right', '220px')")
+    evidence = window.evaluate_js("""
+        (() => {
+            const labels = [...document.querySelectorAll('#histogram-channels label')];
+            const panel = document.querySelector('.inspector').getBoundingClientRect();
+            const bounds = labels.map(label => label.getBoundingClientRect());
+            const horizontal = bounds.length === 3 && bounds.every((box, index) =>
+                box.top === bounds[0].top && box.right <= panel.right &&
+                (index === 0 || bounds[index - 1].right <= box.left));
+            const controls = labels.every(label => {
+                const box = label.querySelector('input').getBoundingClientRect();
+                const text = label.querySelector('span').getBoundingClientRect();
+                return box.width === 14 && box.height === 14 && box.right < text.left;
+            });
+            const inputs = labels.map(label => label.querySelector('input'));
+            const canvas = document.getElementById('histogram');
+            const original = canvas.toDataURL();
+            const independent = inputs.every((input, index) => {
+                labels[index].click();
+                const changed = !input.checked && inputs.every((other, i) =>
+                    i === index || other.checked) && canvas.toDataURL() !== original;
+                labels[index].click();
+                return changed && input.checked && canvas.toDataURL() === original;
+            });
+            return { horizontal, controls, independent };
+        })()
+    """)
+    assert evidence == {"horizontal": True, "controls": True, "independent": True}, evidence
+    if screenshot:
+        capture(screenshot.with_name(f"{screenshot.stem}-histograma{str(screenshot.suffix)}"))
+    window.evaluate_js("document.querySelector('.workspace').style.removeProperty('--right')")
+
+
 def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
     """Exercise folder tabs, ROI, queue, versioned results and project reopen."""
 
@@ -44,6 +79,13 @@ def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
     click('.workspaces [data-panel="projects"]')
     click('[data-screen="projects"] [data-action="new"]')
     wait_for(window, "document.querySelector('#new-project').open")
+    assert window.evaluate_js("""
+        (() => {
+            const input = document.querySelector('#new-project .choice-input');
+            return input.getBoundingClientRect().right <
+                input.nextElementSibling.getBoundingClientRect().left;
+        })()
+    """)
     snapshot("novo-projeto")
     window.evaluate_js(
         "document.querySelector('#new-project input[name=name]').value = 'Estudo de teste';"
@@ -82,9 +124,19 @@ def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
         document.querySelector('#batch-form select[name=scope]').value = 'all';
         document.querySelector('#batch-methods input[value=estrutural]').checked = true;
     """)
+    assert window.evaluate_js("""
+        [...document.querySelectorAll('#batch-methods .choice-input')].every(input =>
+            input.getBoundingClientRect().right < input.nextElementSibling.getBoundingClientRect().left)
+    """)
     click("#start-batch")
     wait_for(window, "document.querySelector('#queue-progress').value === 6", timeout=70)
     assert window.evaluate_js("document.querySelectorAll('#queue [data-batch=open]').length") == 6
+    click('[data-action="batch-export"]')
+    assert window.evaluate_js("""
+        [...document.querySelectorAll('#export-results .choice-input')].every(input =>
+            input.getBoundingClientRect().right < input.nextElementSibling.getBoundingClientRect().left)
+    """)
+    click('#export-results button[value="cancel"]')
     snapshot("lote")
     click("#queue [data-batch=open]")
     wait_for(window, "document.querySelector('#result-list [data-result]') !== null")
@@ -175,6 +227,7 @@ def main() -> None:
                         window,
                         "document.getElementById('dimensions')?.textContent.includes('CPU')",
                     )
+                exercise_histogram(window, options.screenshot)
                 if options.workspace:
                     exercise_workspace(window, saved, options.screenshot)
                 elif options.screenshot:

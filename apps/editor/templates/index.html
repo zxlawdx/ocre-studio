@@ -170,12 +170,13 @@
     <aside class="inspector" aria-label="Ferramentas de imagem">
         <details open><summary>Histograma RGB</summary>
             <canvas id="histogram" width="252" height="76" aria-label="Distribuição de intensidade RGB do resultado ativo"></canvas>
-            <div class="channels" id="histogram-channels">
-                <label><input type="checkbox" value="0" checked> R</label>
-                <label><input type="checkbox" value="1" checked> G</label>
-                <label><input type="checkbox" value="2" checked> B</label>
-                <span>Resultado ativo</span>
-            </div>
+            <fieldset class="histogram-channels" id="histogram-channels">
+                <legend class="sr-only">Canais exibidos no histograma</legend>
+                <label class="choice" data-channel="red"><input class="choice-input" type="checkbox" value="0" checked><span>Vermelho</span></label>
+                <label class="choice" data-channel="green"><input class="choice-input" type="checkbox" value="1" checked><span>Verde</span></label>
+                <label class="choice" data-channel="blue"><input class="choice-input" type="checkbox" value="2" checked><span>Azul</span></label>
+            </fieldset>
+            <p class="histogram-source">Resultado ativo</p>
         </details>
         <h2>Realce arqueológico</h2>
         <fieldset id="primary-techniques" class="techniques"><legend class="sr-only">Técnica de realce</legend></fieldset>
@@ -241,7 +242,7 @@
     <dialog id="new-project">
         <form method="dialog"><h2>Novo projeto</h2>
             <label>Nome <input name="name" required maxlength="120"></label>
-            <label><input type="checkbox" name="recursive" checked> Incluir subpastas</label>
+            <label class="choice"><input class="choice-input" type="checkbox" name="recursive" checked><span>Incluir subpastas</span></label>
             <details><summary>Dados da pesquisa</summary>
                 <label>Sítio <input name="site"></label><label>Painel ou setor <input name="panel"></label>
                 <label>Responsável <input name="researcher"></label><label>Observações <textarea name="notes"></textarea></label>
@@ -255,8 +256,8 @@
         <label>Técnica <select name="technique"><option value="">Todas as técnicas</option></select></label>
         <label>Lado máximo (0 = manter tamanho) <input type="number" name="max_side" value="0" min="0" max="10000"></label>
         <label>Qualidade JPEG <input type="number" name="quality" value="92" min="1" max="100"></label>
-        <label><input type="checkbox" name="favorite"> Somente favoritos</label>
-        <label><input type="checkbox" name="metadata"> Incluir parâmetros</label>
+        <label class="choice"><input class="choice-input" type="checkbox" name="favorite"><span>Somente favoritos</span></label>
+        <label class="choice"><input class="choice-input" type="checkbox" name="metadata"><span>Incluir parâmetros</span></label>
         <div class="commands"><button value="cancel" formnovalidate>Cancelar</button><button class="primary" value="confirm">Escolher destino</button></div>
     </form></dialog>
     <dialog id="help"><form method="dialog"><h2>Atalhos e limites científicos</h2>

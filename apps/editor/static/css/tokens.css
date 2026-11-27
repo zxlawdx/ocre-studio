@@ -12,6 +12,12 @@
   --primitive-ochre: #d4a77e;
   --primitive-copper: #543e31;
   --primitive-rail: #25262b;
+  --primitive-coral: #f48a7f;
+  --primitive-sage: #8dd9a0;
+  --primitive-sky: #8caef4;
+  --primitive-controlSize: 14px;
+  --primitive-controlGap: 0.35rem;
+  --primitive-controlTarget: 1.75rem;
 }
 
 /* === SEMANTIC === */
@@ -25,6 +31,12 @@
   --accent: #d4a77e;
   --selection: #543e31;
   --rail: #25262b;
+  --channel-red: #f48a7f;
+  --channel-green: #8dd9a0;
+  --channel-blue: #8caef4;
+  --choice-size: 14px;
+  --choice-gap: 0.35rem;
+  --choice-target: 1.75rem;
 }
 
 /* === COMPONENTS === */

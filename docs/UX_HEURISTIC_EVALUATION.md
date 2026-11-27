@@ -26,3 +26,5 @@ O smoke usa o WebView nativo do Vela em GTK. Ele testa abertura de projeto, duas
 ## Medição local
 
 Uma pasta temporária no Linux Mint com 1.000 JPEGs sintéticos de 640 × 420, distribuídos em dez subpastas, levou 0,062 s para catalogação e 0,094 s para gerar as primeiras 20 miniaturas. RSS de pico do processo do benchmark foi 45,7 MiB. A medição exclui o processo gráfico e a inferência, e usa arquivos recém-gerados no mesmo SSD.
+
+A faixa do histograma usa rótulos completos e a mesma cor de cada curva. O teste gráfico reduz o inspetor a 220 px, verifica as caixas na mesma linha e compara os pixels do canvas depois de alternar cada canal. Os formulários de novo projeto, lote e exportação usam o mesmo componente de seleção com caixa de tamanho fixo.

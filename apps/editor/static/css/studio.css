@@ -90,12 +90,11 @@
 }
 .workspace [hidden] { display: none; }
 .workspace #histogram { display: block; width: 100%; background: var(--canvas); }
-.workspace .channels { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; }
-.workspace .channels span:nth-child(1) { color: #f48a7f; }
-.workspace .channels span:nth-child(2) { color: #8dd9a0; }
-.workspace .channels span:nth-child(3) { color: #8caef4; }
 .workspace .inspector label { display: grid; gap: 4px; margin: 9px 0; }
-.workspace .inspector label > * { width: 100%; box-sizing: border-box; }
+.workspace .inspector label > :is(select, textarea, input:not([type="checkbox"], [type="radio"])) {
+    width: 100%;
+    box-sizing: border-box;
+}
 @media (max-width: 780px) {
     .workspace { grid-template-columns: minmax(0, 1fr) minmax(195px, 29%); }
     .workspace .browser { display: none; }

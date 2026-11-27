@@ -5,7 +5,10 @@ import { Viewport } from "./viewport.js";
 
 function drawHistogram(canvas, channels, visible) {
     const ctx = canvas.getContext("2d");
-    const colors = ["#f48a7f", "#8dd9a0", "#8caef4"];
+    const style = getComputedStyle(canvas);
+    const colors = ["red", "green", "blue"].map((channel) =>
+        style.getPropertyValue(`--channel-${channel}`).trim()
+    );
     const maximum = Math.max(1, ...channels.flat());
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     channels.forEach((channel, index) => {
