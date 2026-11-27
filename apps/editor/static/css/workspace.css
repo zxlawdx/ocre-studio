@@ -13,8 +13,9 @@
 .workspace .menubar { align-items: center; gap: 0; }
 .workspace .menubar details { position: relative; }
 .workspace .menubar summary { list-style: none; padding: 7px 9px; }
+.workspace .menubar details[open] > summary { background: var(--control); color: var(--accent); }
 .workspace summary:hover { color: var(--accent); }
-.workspace .popup { position: absolute; top: 100%; left: 0; display: grid; min-width: 175px; padding: 4px; background: var(--rail); border: 1px solid var(--line); z-index: 6; box-shadow: 0 8px 18px #0006; }
+.workspace .popup { position: absolute; top: 100%; left: var(--menu-offset, 0px); display: grid; min-width: 175px; max-width: calc(100vw - 16px); max-height: min(65vh, 26rem); overflow: auto; padding: 4px; background: var(--rail); border: 1px solid var(--line); z-index: 6; box-shadow: 0 8px 18px #0006; }
 .workspace .popup button { text-align: left; border: 0; background: transparent; white-space: nowrap; }
 .workspace .popup button:hover { background: var(--control); }
 .workspace .browser, .workspace .inspector { min-width: 0; border: 0; }

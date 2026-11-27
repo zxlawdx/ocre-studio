@@ -1,5 +1,6 @@
 import { BatchView } from "./batch.js";
 import { CatalogView } from "./catalog.js";
+import { mountMenubar } from "./menubar.js";
 import { adjustments, element, intensity, neural, techniqueName, techniques } from "./techniques.js";
 import { Viewport } from "./viewport.js";
 
@@ -464,6 +465,7 @@ export async function mount(root, signal) {
 
     initializeTools(find, (operation, value) => edit(`set:${operation}`, value), signal);
     initializeResize(root, signal);
+    mountMenubar(find(".menubar"), signal);
     root.addEventListener("click", (event) => {
         const trigger = event.target.closest("button");
         if (!trigger || trigger.disabled) return;
@@ -494,7 +496,6 @@ export async function mount(root, signal) {
             const name = resultAction === "rename" ? window.prompt("Nome do resultado") : "";
             if (name !== null) sync(() => api.ocre_result(result, resultAction, name));
         }
-        trigger.closest(".menubar details")?.removeAttribute("open");
         if (trigger.closest("#catalog-context")) find("#catalog-context").hidden = true;
     }, { signal });
 

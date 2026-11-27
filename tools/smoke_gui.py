@@ -31,6 +31,27 @@ def capture(path: Path) -> None:
     subprocess.run(["import", "-window", "Ocre Studio", str(path)], check=True, timeout=15)
 
 
+def exercise_menus(window) -> None:
+    """Switch desktop menus and dismiss them without triggering editor shortcuts."""
+    assert window.evaluate_js("""
+        (() => {
+            const bar = document.querySelector('.menubar');
+            const menus = [...bar.querySelectorAll('summary')];
+            const count = () => bar.querySelectorAll('details[open]').length;
+            const exclusive = menus.every(menu => {
+                menu.click();
+                return count() === 1 && menu.parentElement.open;
+            });
+            const last = menus.at(-1);
+            window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', cancelable: true}));
+            const escaped = count() === 0 && document.activeElement === last;
+            menus[0].click();
+            document.querySelector('.workspaces').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}));
+            return exclusive && escaped && count() === 0;
+        })()
+    """)
+
+
 def exercise_histogram(window, screenshot: Path | None) -> None:
     """Check channel geometry and pixel redraw at reduced and default panel widths."""
     window.evaluate_js("document.querySelector('.workspace').style.setProperty('--right', '220px')")
@@ -203,6 +224,7 @@ def main() -> None:
                 window.evaluate_js("document.querySelector('.studio-home a')?.click()")
                 wait_for(window, "Boolean(document.getElementById('ocre-editor'))")
                 sleep(0.4)
+                exercise_menus(window)
                 window.evaluate_js("document.querySelector('[data-action=open]').click()")
                 wait_for(
                     window,
