@@ -250,7 +250,9 @@ def main() -> None:
                         "document.querySelector('[data-action=infer]').click()"
                     )
                     wait_for(
-                        window, "document.getElementById('maps')?.value === 'combinado'", timeout=180
+                        window,
+                        "document.getElementById('maps')?.value === 'combinado'",
+                        timeout=180,
                     )
                     wait_for(
                         window,
