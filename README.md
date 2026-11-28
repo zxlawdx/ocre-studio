@@ -5,7 +5,7 @@
     <em>Software desktop para processamento digital, realce cromático e análise estrutural de registros rupestres.</em>
   </p>
   <p>
-    <img src="https://img.shields.io/badge/vers%C3%A3o-0.1.0--alpha-blue" alt="Versão 0.1.0-alpha" />
+    <img src="https://img.shields.io/badge/vers%C3%A3o-0.1.0--alpha.1-blue" alt="Versão 0.1.0-alpha.1" />
     <img src="https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white" alt="Python 3.12" />
     <img src="https://img.shields.io/badge/pytorch-CPU%20%7C%20CUDA-EE4C2C?logo=pytorch&logoColor=white" alt="PyTorch" />
     <img src="https://img.shields.io/badge/plataforma-Windows%20%7C%20Linux-lightgrey" alt="Plataforma Windows | Linux" />
@@ -45,7 +45,7 @@
 <h2>Escopo e Estado Atual do Projeto</h2>
 
 <p>
-  O Ocre Studio encontra-se em <strong>fase alfa</strong> (<code>v0.1.0-alpha</code>) e em desenvolvimento contínuo. Para clareza metodológica, o escopo atual divide-se em três frentes:
+  O Ocre Studio encontra-se em <strong>fase alfa</strong> (<code>v0.1.0-alpha.1</code>) e em desenvolvimento contínuo. Para clareza metodológica, o escopo atual divide-se em três frentes:
 </p>
 
 <h3>1. Implementado e Integrado</h3>
@@ -358,7 +358,7 @@ python manage.py buildapp --installer</code></pre>
   author  = {Barroso Filho, Marinaldo da Costa},
   title   = {Ocre Studio: Archaeological Imaging and AI},
   year    = {2026},
-  version = {0.1.0-alpha},
+  version = {0.1.0-alpha.1},
   url     = {https://github.com/zxlawdx/ocre-studio},
   note    = {Software para processamento digital e realce de imagens arqueológicas}
 }</code></pre>
@@ -366,7 +366,7 @@ python manage.py buildapp --installer</code></pre>
 <p><strong>Referência (ABNT):</strong></p>
 <blockquote>
   <p>
-    BARROSO FILHO, Marinaldo da Costa. <strong>Ocre Studio</strong>: software para processamento digital e realce de imagens arqueológicas com aprendizado profundo. Versão 0.1.0-alpha. Porto Velho: UNIR, 2026. Disponível em: <a href="https://github.com/zxlawdx/ocre-studio">https://github.com/zxlawdx/ocre-studio</a>.
+    BARROSO FILHO, Marinaldo da Costa. <strong>Ocre Studio</strong>: software para processamento digital e realce de imagens arqueológicas com aprendizado profundo. Versão 0.1.0-alpha.1. Porto Velho: UNIR, 2026. Disponível em: <a href="https://github.com/zxlawdx/ocre-studio">https://github.com/zxlawdx/ocre-studio</a>.
   </p>
 </blockquote>
 

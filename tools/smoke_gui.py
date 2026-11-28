@@ -25,6 +25,8 @@ def wait_for(window, expression: str, timeout: float = 15) -> None:
         sleep(0.1)
     state = window.evaluate_js("""
         JSON.stringify({status: document.querySelector('#status')?.textContent,
+        filename: document.querySelector('#filename')?.textContent,
+        busy: document.querySelector('.viewport')?.getAttribute('aria-busy'),
         maps: document.querySelector('#maps')?.value,
         dimensions: document.querySelector('#dimensions')?.textContent})
     """)
@@ -158,7 +160,8 @@ def exercise_guide(window, screenshot: Path | None) -> None:
     """)
     wait_for(
         window,
-        "document.querySelector('#history li:first-child strong')?.textContent === 'Separar cores'",
+        "document.querySelector('#history li:first-child strong')?.textContent === 'Separar cores' && "
+        "document.querySelector('.viewport')?.getAttribute('aria-busy') === 'false'",
     )
     window.evaluate_js("document.querySelector('#tool-enhance').click()")
 
@@ -414,7 +417,8 @@ def main() -> None:
                 wait_for(
                     window,
                     "document.getElementById('filename')?.textContent === 'amostra-inicial.png' && "
-                    "document.getElementById('placeholder').hidden",
+                    "document.getElementById('placeholder').hidden && "
+                    "document.querySelector('.viewport')?.getAttribute('aria-busy') === 'false'",
                 )
                 sleep(0.4)
                 exercise_menus(window)
@@ -422,7 +426,8 @@ def main() -> None:
                 window.evaluate_js("document.querySelector('[data-action=open]').click()")
                 wait_for(
                     window,
-                    "document.getElementById('filename')?.textContent === 'amostra-sintetica.png'",
+                    "document.getElementById('filename')?.textContent === 'amostra-sintetica.png' && "
+                    "document.querySelector('.viewport')?.getAttribute('aria-busy') === 'false'",
                 )
                 window.evaluate_js(
                     "const brightness = document.getElementById('adjust-brightness');"
