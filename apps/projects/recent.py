@@ -35,12 +35,16 @@ class RecentProjects:
         """Save a bounded recent entry after a successful open or save."""
         if catalog.path is None:
             return
-        path = str(catalog.path.resolve())
+        self.remember_file(catalog.path, catalog.name, catalog.root, len(catalog.photos))
+
+    def remember_file(self, file: Path, name: str, root: Path, photos: int) -> None:
+        """Record any supported project file in the shared recent-project list."""
+        path = str(file.resolve())
         entry = {
-            "name": catalog.name,
+            "name": name,
             "path": path,
-            "root": str(catalog.root),
-            "photos": len(catalog.photos),
+            "root": str(root),
+            "photos": photos,
             "accessed": datetime.now(UTC).isoformat(),
         }
         with self.lock:

@@ -12,6 +12,21 @@ import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
 
 MAX_PIXELS = 24_000_000
+MAX_REGIONS = 16
+
+
+def validate_regions(boxes: list, size: tuple[int, int]) -> list[list[int]]:
+    """Validate bounded selections in original image coordinates."""
+    if not isinstance(boxes, list) or len(boxes) > MAX_REGIONS:
+        raise ValueError("Use até 16 regiões por fotografia.")
+    width, height = size
+    for box in boxes:
+        if not isinstance(box, list) or len(box) != 4 or any(type(n) is not int for n in box):
+            raise ValueError("Região inválida.")
+        x, y, right, bottom = box
+        if not (0 <= x < right <= width and 0 <= y < bottom <= height):
+            raise ValueError("Selecione regiões dentro da fotografia.")
+    return boxes
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,9 +36,27 @@ class Adjustment:
     name: str
     value: float
     replace: bool = False
+    regions: list[list[int]] | None = None
 
-    def apply(self, image: Image.Image) -> Image.Image:
+    def apply(
+        self, image: Image.Image, coordinate_size: tuple[int, int] | None = None
+    ) -> Image.Image:
         """Apply the operation to an RGB image."""
+        if self.regions:
+            output = image.copy()
+            width, height = size = coordinate_size or image.size
+            for x, y, right, bottom in validate_regions(self.regions, size):
+                box = (
+                    x * image.width // width,
+                    y * image.height // height,
+                    (right * image.width + width - 1) // width,
+                    (bottom * image.height + height - 1) // height,
+                )
+                output.paste(self._apply(image.crop(box)), box)
+            return output
+        return self._apply(image)
+
+    def _apply(self, image: Image.Image) -> Image.Image:
         enhancers = {
             "brightness": ImageEnhance.Brightness,
             "contrast": ImageEnhance.Contrast,
@@ -84,7 +117,8 @@ class ImageDocument:
 
     def add(self, step: Adjustment) -> None:
         """Validate a change before adding it to the history."""
-        step.apply(Image.new("RGB", (1, 1)))
+        validate_regions(step.regions or [], self.original.size)
+        step._apply(Image.new("RGB", (2, 2)))
         if self.cursor >= 64:
             raise ValueError("O histórico atingiu o limite de 64 ajustes.")
         self.history[self.cursor :] = [step]
@@ -99,7 +133,7 @@ class ImageDocument:
                 effective = [old for old in effective if old.name != step.name]
             effective.append(step)
         for step in effective:
-            image = step.apply(image)
+            image = step.apply(image, self.original.size)
         return image
 
     def export(self, path: Path) -> None:

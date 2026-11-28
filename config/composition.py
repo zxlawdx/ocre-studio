@@ -9,7 +9,7 @@ from apps.editor.service import ImageDocument
 from apps.model_library.native import NativeModelRegistry
 from apps.model_library.service import KokentauModel
 from apps.projects.batch import Batch
-from apps.projects.catalog import Catalog
+from apps.projects.catalog import Catalog, Session
 from apps.projects.recent import RecentProjects
 from apps.projects.service import ProjectRepository
 
@@ -31,6 +31,7 @@ class Workspace:
     recent: RecentProjects = field(default_factory=RecentProjects)
     catalog: Catalog | None = None
     photo: str | None = None
+    standalone_view: Session = field(default_factory=Session)
     native_models: NativeModelRegistry = field(default_factory=NativeModelRegistry)
     document: ImageDocument | None = None
     model: KokentauModel | None = None

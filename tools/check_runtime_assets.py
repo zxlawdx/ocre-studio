@@ -37,6 +37,13 @@ def check(root: Path) -> None:
         route = app.bridge.navigate("/editor")
         if not route["ok"] or "editor/js/editor.js" not in route["html"]:
             raise RuntimeError("Editor route failed.")
+        sample = app.bridge.ocre_state()["document"]
+        if not sample or (sample["name"], sample["width"], sample["height"]) != (
+            "amostra-inicial.png",
+            640,
+            420,
+        ):
+            raise RuntimeError("Startup sample did not load.")
         pixels = np.random.default_rng(42).integers(40, 190, (48, 56, 3), dtype=np.uint8)
         registry = NativeModelRegistry()
         if registry.available():

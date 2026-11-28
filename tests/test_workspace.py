@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from PIL import Image
 
@@ -71,7 +73,9 @@ def test_batch_continues_after_failure_and_retries_only_failed_tasks():
     def first(task):
         calls.append(task.photo)
         if task.photo == "broken":
-            raise OSError("controlled failure")
+            from cv2 import COLOR_RGB2LAB, cvtColor
+
+            cvtColor(None, COLOR_RGB2LAB)
         return {"id": task.photo}
 
     batch.run(first, lambda: None)
@@ -133,6 +137,33 @@ def test_late_inference_persists_to_its_photo_without_replacing_active_tab(tmp_p
         assert not ResultStore(catalog.derivative_dir("b.png")).list()
     finally:
         unblock.set()
+        app.stop()
+
+
+def test_practice_project_copies_credited_sources_to_writable_folder(tmp_path, monkeypatch):
+    from hashlib import sha256
+    from threading import Event
+
+    from config.wsgi import create_app
+
+    app = create_app()
+    bridge = app.bridge
+    complete = Event()
+    monkeypatch.setattr(bridge, "_folder", lambda: tmp_path)
+    app.events.on("ocre:result", lambda _payload: complete.set())
+    try:
+        assert bridge.ocre_practice_project()
+        assert complete.wait(5)
+        catalog = bridge._workspace.catalog
+        assert catalog.root.parent == tmp_path
+        assert catalog.photos == ["jarro-de-malqata.jpg", "serra-da-capivara.jpg"]
+        manifest = json.loads((catalog.root / "proveniencia.json").read_text(encoding="utf-8"))
+        for entry in manifest["examples"]:
+            assert (
+                sha256(catalog.source(entry["input"]).read_bytes()).hexdigest()
+                == entry["input_sha256"]
+            )
+    finally:
         app.stop()
 
 

@@ -9,11 +9,29 @@ from pathlib import Path
 from PIL import Image, ImageOps
 from webview import FileDialog
 
-from apps.editor.service import MAX_PIXELS, Adjustment, ImageDocument, preview
+from apps.editor.service import MAX_PIXELS, Adjustment, ImageDocument, preview, validate_regions
 from apps.projects.batch import Task
 from apps.projects.catalog import Catalog, Session
 from apps.projects.export import export_results
 from apps.projects.results import FORMATS, ResultStore
+
+CLASSIC_FILTERS = {
+    "classic_equalize_1": ("equalize", 1),
+    "classic_clahe_2": ("clahe", 2),
+    "classic_decorrelation_1": ("decorrelation", 1),
+    "classic_channel_0": ("channel", 0),
+    "classic_channel_1": ("channel", 1),
+    "classic_channel_2": ("channel", 2),
+    "classic_pca_0": ("pca", 0),
+    "classic_pca_1": ("pca", 1),
+    "classic_pca_2": ("pca", 2),
+    "classic_hsv_0": ("hsv", 0),
+    "classic_hsv_1": ("hsv", 1),
+    "classic_hsv_2": ("hsv", 2),
+    "classic_lab_0": ("lab", 0),
+    "classic_lab_1": ("lab", 1),
+    "classic_lab_2": ("lab", 2),
+}
 
 
 @lru_cache(maxsize=192)
@@ -51,11 +69,17 @@ class CatalogCommands:
         self._workspace.catalog = catalog
         self._workspace.photo = None
         self._workspace.document = None
+        self._workspace.standalone_view = Session()
         return {
             "catalog": catalog.summary() if catalog else None,
             "clear": True,
             "queue": self._workspace.batch.snapshot(),
         }
+
+    def ocre_project_dirty(self) -> bool:
+        """Tell the welcome screen whether opening another project may discard edits."""
+        with self._state_lock:
+            return bool(self._workspace.catalog and self._workspace.catalog.dirty)
 
     def ocre_recent(self) -> list[dict]:
         """List recently opened project files."""
@@ -75,14 +99,7 @@ class CatalogCommands:
             path = self._workspace.recent.resolve(key, remove)
             if remove:
                 return {"recent": self.ocre_recent()}
-            if path.stat().st_size > 32 * 1024**2:
-                raise ValueError("O projeto excede o tamanho permitido.")
-            data = json.loads(path.read_text(encoding="utf-8"))
-            if data.get("version") != 2:
-                raise ValueError("Formato deste projeto recente incompatível.")
-            catalog = Catalog.open(path, data)
-            result = self._switch_catalog(catalog)
-            return {**result, "recent": self._remember(catalog)}
+            return self._load_project(path)
 
         with self._state_lock:
             return self._run(open_recent)
@@ -183,31 +200,27 @@ class CatalogCommands:
                 catalog.tabs = valid
                 catalog.dirty = True
 
-    def ocre_view(self, key: str, roi: list | None, view: dict) -> None:
-        """Store the latest canvas state without converting it to preview pixels."""
+    def ocre_view(self, key: str | None, regions: list, active: int, view: dict) -> None:
+        """Store the current regions and canvas state in original image coordinates."""
         with self._state_lock:
             catalog = self._workspace.catalog
-            if catalog is None or key != self._workspace.photo:
+            if key != self._workspace.photo or self._workspace.document is None:
                 return
-            document = self._document()
-            if roi is not None:
-                if (
-                    not isinstance(roi, list)
-                    or len(roi) != 4
-                    or any(type(item) is not int for item in roi)
-                ):
-                    raise ValueError("Área de análise inválida.")
-                x, y, right, bottom = roi
-                if not (
-                    0 <= x < right <= document.original.width
-                    and 0 <= y < bottom <= document.original.height
-                ):
-                    raise ValueError("Área fora da fotografia.")
-            session = catalog.sessions.setdefault(key, Session())
-            if session.roi != roi or session.view != view:
-                session.roi = roi
+            boxes = validate_regions(regions, self._document().original.size)
+            if type(active) is not int or not 0 <= active < max(1, len(boxes)):
+                raise ValueError("Região ativa inválida.")
+            session = (
+                catalog.sessions.setdefault(key, Session())
+                if catalog and key
+                else (self._workspace.standalone_view)
+            )
+            if (session.regions, session.active_region, session.view) != (boxes, active, view):
+                session.regions = boxes
+                session.active_region = active
+                session.roi = boxes[active] if boxes else None
                 session.view = view
-                catalog.dirty = True
+                if catalog and key:
+                    catalog.dirty = True
 
     def _record(self, document: ImageDocument) -> None:
         catalog, photo = self._workspace.catalog, self._workspace.photo
@@ -273,7 +286,7 @@ class CatalogCommands:
         if (
             technique not in self._techniques
             or not 0 <= strength <= 1
-            or region not in {"selection", "full", "auto", "saved"}
+            or region not in {"selection", "all", "full", "auto", "saved"}
             or not isinstance(adjustments, list)
             or len(adjustments) > 64
         ):
@@ -350,7 +363,10 @@ class CatalogCommands:
             raise ValueError("O lote excede 10.000 tarefas.")
         for key in photos:
             catalog.source(key)
-        if any(technique not in self._techniques for technique in techniques):
+        if any(
+            technique not in self._techniques and technique not in CLASSIC_FILTERS
+            for technique in techniques
+        ):
             raise ValueError("Técnica de processamento desconhecida.")
         format_name = options.get("format", "png")
         max_side = int(options.get("max_side", 0))
@@ -361,7 +377,10 @@ class CatalogCommands:
             raise ValueError("Configuração de saída inválida.")
         if mode not in {"full", "individual", "auto", "shared"} or not 0 <= strength <= 1:
             raise ValueError("Parâmetros do lote inválidos.")
-        regions = {key: catalog.sessions.get(key, Session()).roi for key in photos}
+        regions = {}
+        for key in photos:
+            session = catalog.sessions.get(key, Session())
+            regions[key] = session.regions or ([session.roi] if session.roi else [])
         shared = None
         if mode == "shared":
             current = catalog.sessions.get(self._workspace.photo, Session()).roi
@@ -373,7 +392,9 @@ class CatalogCommands:
             Adjustment(**item)
             for item in self._preset_value(
                 {
-                    "technique": techniques[0],
+                    "technique": next(
+                        (item for item in techniques if item in self._techniques), "estrutural"
+                    ),
                     "strength": strength,
                     "adjustments": options.get("adjustments", []),
                 }
@@ -401,8 +422,11 @@ class CatalogCommands:
                     max(right, x + 1),
                     max(bottom, y + 1),
                 ]
-            with self._workspace.inference_lock:
-                self._infer(document, task.technique, strength, region, "auto", announce=False)
+            if task.technique in CLASSIC_FILTERS:
+                self._batch_filter(document, task.technique, region)
+            else:
+                with self._workspace.inference_lock:
+                    self._infer(document, task.technique, strength, region, "auto", announce=False)
             for adjustment in steps:
                 document.add(adjustment)
             return ResultStore(catalog.derivative_dir(task.photo)).save(

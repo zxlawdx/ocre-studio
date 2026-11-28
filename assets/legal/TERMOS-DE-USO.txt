@@ -1,0 +1,29 @@
+﻿OCRE STUDIO — LICENÇA DE USO
+Copyright © 2026 Marinaldo da Costa Barroso Filho (zxlawdx).
+
+1. Permissão de uso
+Você pode instalar e usar gratuitamente as cópias oficiais do Ocre Studio em
+seus próprios trabalhos pessoais, acadêmicos ou profissionais. Também pode
+manter uma cópia de segurança. A disponibilidade do código para consulta não
+concede direitos adicionais de reprodução ou distribuição.
+
+2. Direitos reservados
+A titularidade e os créditos do Ocre Studio permanecem com Marinaldo da Costa
+Barroso Filho. Somente o titular ou pessoa autorizada por ele por escrito pode
+vender, revender, sublicenciar mediante pagamento ou incluir o aplicativo em
+uma oferta comercial. Preserve os créditos e os avisos de direitos autorais.
+Para redistribuir o código, o instalador ou versões modificadas, solicite
+autorização prévia ao titular. Você pode compartilhar o link oficial do projeto.
+
+3. Fotografias, resultados e componentes de terceiros
+Esta licença não reivindica direitos sobre as suas fotografias ou resultados.
+O uso e a publicação respeitam os direitos já aplicáveis ao material de entrada.
+Bibliotecas, modelos e imagens de exemplo seguem os termos dos respectivos
+titulares. Consulte os avisos e créditos distribuídos com o aplicativo.
+
+4. Uso científico
+O realce auxilia a inspeção visual. Guarde os originais e verifique as
+interpretações arqueológicas com observações independentes. Aplicam-se os
+direitos e garantias previstos em lei.
+
+Projeto oficial: https://github.com/zxlawdx/ocre-studio

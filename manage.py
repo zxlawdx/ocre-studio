@@ -6,11 +6,14 @@ import sys
 from vela.cli.commands import CommandRunner
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "buildapp" and "--plugins" in sys.argv[2:]:
+    if len(sys.argv) > 1 and sys.argv[1] == "buildapp":
         from vela.plugins import register_build_hook
 
-        from tools.build_hooks import exclude_unused_qt
+        from tools.build_hooks import exclude_unused_qt, keep_model_payloads_external
 
         register_build_hook(exclude_unused_qt)
+        register_build_hook(keep_model_payloads_external)
+        if "--plugins" not in sys.argv[2:]:
+            sys.argv.append("--plugins")
     result = CommandRunner().execute(sys.argv[1:])
     sys.exit(result if isinstance(result, int) else 0)

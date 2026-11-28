@@ -1,7 +1,8 @@
 <link rel="stylesheet" href="{{ static('editor/css/tokens.css') }}">
 <link rel="stylesheet" href="{{ static('editor/css/studio.css') }}">
 <link rel="stylesheet" href="{{ static('editor/css/workspace.css') }}">
-<section class="ocre workspace" id="ocre-editor">
+<link rel="stylesheet" href="{{ static('editor/css/help.css') }}">
+<section class="ocre workspace" id="ocre-editor" data-icons="{{ static('editor/icons.svg') }}">
     <header class="top">
         <a href="/home" data-vela-link class="wordmark">
             <img src="{{ static('editor/mark.svg') }}" width="25" height="25" alt="">
@@ -41,7 +42,7 @@
                 <button data-action="toggle-gallery">Recolher ou mostrar galeria</button>
             </div></details>
             <details><summary>Ajuda</summary><div class="popup">
-                <button data-action="help">Atalhos e limites científicos</button>
+                <button data-action="help">Guia e atalhos</button>
             </div></details>
         </nav>
         <button class="primary" data-action="export" data-document>Exportar</button>
@@ -50,9 +51,10 @@
         <button data-panel="projects">Projetos</button>
         <button data-panel="editor" aria-current="page">Editor</button>
         <button data-panel="batch">Processamento em lote</button>
+        <button data-panel="help">Ajuda</button>
     </nav>
     <aside class="browser" aria-label="Explorador de fotografias">
-        <div class="section-title"><h2>Explorador</h2><button data-action="folder" aria-label="Abrir pasta" title="Abrir pasta">＋</button></div>
+        <div class="section-title"><h2>Explorador</h2><button data-action="folder" aria-label="Abrir pasta" data-tooltip="Abrir pasta"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="{{ static('editor/icons.svg') }}#folder-add"></use></svg></button></div>
         <p id="project-heading" class="project-name">Sem projeto</p>
         <input id="photo-search" type="search" placeholder="Pesquisar fotografias" aria-label="Pesquisar fotografias">
         <div id="explorer" tabindex="0" role="group" aria-label="Catálogo de fotografias"></div>
@@ -71,18 +73,18 @@
                 <button data-action="undo" data-document>Desfazer</button>
                 <button data-action="redo" data-document>Refazer</button>
             </div>
-            <ol id="history"></ol>
+            <ol id="history" class="history-timeline"></ol>
         </details>
     </aside>
     <div class="splitter" data-resize="left" role="separator" tabindex="0" aria-label="Redimensionar explorador" aria-orientation="vertical" aria-valuemin="160" aria-valuemax="460" aria-valuenow="240"></div>
     <main class="viewer" data-screen="editor" aria-label="Visualização">
         <div id="tabs" class="document-tabs" role="group" aria-label="Fotografias abertas"></div>
         <div class="toolbar">
-            <button data-view="pan" aria-pressed="true" title="Mover imagem (M)">Mover</button>
-            <button data-view="out" aria-label="Diminuir zoom" title="Diminuir zoom">−</button>
-            <button data-view="in" aria-label="Aumentar zoom" title="Aumentar zoom">+</button>
-            <button data-view="roi" aria-pressed="false" title="Selecionar região (R)">Selecionar região</button>
-            <button data-view="clear-roi" title="Limpar seleção (Esc)">Limpar</button>
+            <button data-view="pan" aria-pressed="true" aria-label="Mover imagem (M)" data-tooltip="Mover imagem (M)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="{{ static('editor/icons.svg') }}#pan"></use></svg></button>
+            <button data-view="out" aria-label="Diminuir zoom" data-tooltip="Diminuir zoom"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="{{ static('editor/icons.svg') }}#zoom-out"></use></svg></button>
+            <button data-view="in" aria-label="Aumentar zoom" data-tooltip="Aumentar zoom"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="{{ static('editor/icons.svg') }}#zoom-in"></use></svg></button>
+            <button data-view="roi" aria-pressed="false" aria-label="Selecionar região (R)" data-tooltip="Selecionar região (R)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="{{ static('editor/icons.svg') }}#roi"></use></svg></button>
+            <button data-view="clear-roi" aria-label="Remover região ativa (Esc)" data-tooltip="Remover região ativa (Esc)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="{{ static('editor/icons.svg') }}#clear-roi"></use></svg></button>
             <div class="comparison-modes" role="group" aria-label="Imagem exibida">
                 <button data-comparison="original" aria-pressed="false">Original</button>
                 <button data-comparison="wipe" aria-pressed="true">Comparar</button>
@@ -90,10 +92,23 @@
                 <button data-comparison="side" aria-pressed="false">Lado a lado</button>
                 <button data-comparison="overlay" aria-pressed="false">Sobrepor</button>
             </div>
-            <button data-view="fit" title="Ajustar à tela (0)">Ajustar à tela</button>
+            <button data-view="fit" aria-label="Ajustar à tela (0)" data-tooltip="Ajustar à tela (0)"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="{{ static('editor/icons.svg') }}#fit"></use></svg></button>
+            <div class="region-toolbar">
+                <button data-view="new-roi" data-document>Nova região</button>
+                <label for="active-region">Região ativa</label>
+                <select id="active-region" aria-label="Região ativa" data-document></select>
+                <label for="region">Aplicar em</label>
+                <select id="region" data-document>
+                    <option value="selection">Região ativa, se houver</option>
+                    <option value="all">Todas as regiões</option>
+                    <option value="full">Imagem inteira</option>
+                    <option value="auto">Automática (realce)</option>
+                    <option value="saved">Referência (realce)</option>
+                </select>
+            </div>
         </div>
         <div class="viewport">
-            <canvas id="photograph" tabindex="0" aria-label="Fotografia. Esc limpa a seleção."></canvas>
+            <canvas id="photograph" tabindex="0" aria-label="Fotografia. Esc remove a região ativa."></canvas>
             <canvas id="region-overlay" aria-hidden="true"></canvas>
             <div class="placeholder" id="placeholder">
                 <img src="{{ static('editor/mark.svg') }}" alt="" width="48" height="48">
@@ -125,7 +140,7 @@
                 <button data-action="close-project">Fechar projeto</button>
             </div>
         </div>
-        <section class="workspace-section"><h2>Projetos recentes</h2><div id="recent-projects"></div></section>
+        <p><a href="/recent" data-vela-link>Ver projetos recentes</a></p>
     </section>
     <section class="workspace-page" data-screen="batch" hidden>
         <h1>Processamento em lote</h1>
@@ -145,7 +160,10 @@
                 </select></label>
             </div>
             <label>Preset do projeto <select id="batch-preset" name="preset"><option value="">Configuração manual</option></select></label>
-            <fieldset class="batch-methods"><legend>Técnicas</legend><div id="batch-methods"></div></fieldset>
+            <fieldset class="batch-methods"><legend>Realce arqueológico</legend><div id="batch-methods"></div></fieldset>
+            <details class="batch-classic"><summary>Filtros clássicos <span id="batch-classic-count"></span></summary>
+                <div id="batch-classic-methods"></div>
+            </details>
             <details><summary>Formato, resolução e intensidade</summary><div class="batch-options">
                 <label>Formato <select name="format"><option value="png">PNG</option><option value="jpeg">JPEG</option><option value="tiff">TIFF</option></select></label>
                 <label>Lado máximo em px <input name="max_side" type="number" min="0" max="10000" value="0" title="Zero mantém a resolução original"></label>
@@ -154,7 +172,7 @@
             </div></details>
             <button class="primary" type="submit" id="start-batch">Iniciar lote</button>
         </form>
-        <div class="queue-heading"><h2 id="queue-status">Fila de processamento</h2>
+        <div class="queue-heading"><div><h2 id="queue-status" role="status">Fila de processamento</h2><span class="muted" id="queue-elapsed"></span></div>
             <div class="commands">
                 <button data-batch="pause">Pausar após tarefa atual</button>
                 <button data-batch="resume">Retomar</button>
@@ -166,6 +184,7 @@
         <progress id="queue-progress" value="0" max="1"></progress>
         <div class="queue-table"><table><thead><tr><th>Fotografia</th><th>Técnica</th><th>Estado</th><th>Tempo</th><th></th></tr></thead><tbody id="queue"></tbody></table></div>
     </section>
+    {{ help_page }}
     <div class="splitter" data-resize="right" role="separator" tabindex="0" aria-label="Redimensionar ferramentas" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="540" aria-valuenow="320"></div>
     <aside class="inspector" aria-label="Ferramentas de imagem">
         <details open><summary>Histograma RGB</summary>
@@ -178,49 +197,64 @@
             </fieldset>
             <p class="histogram-source">Resultado ativo</p>
         </details>
-        <h2>Realce arqueológico</h2>
-        <fieldset id="primary-techniques" class="techniques"><legend class="sr-only">Técnica de realce</legend></fieldset>
-        <label class="slider-row" for="strength">Intensidade <output id="strength-value">85%</output></label>
-        <input type="range" id="strength" min="0" max="1" value="0.85" step="0.01">
-        <div class="region-label" id="region-label" aria-live="polite">Área · imagem inteira</div>
-        <button class="primary apply-button" data-action="infer" data-document>Aplicar realce</button>
-        <button id="cancel-photo" data-action="cancel-photo" hidden>Cancelar após o cálculo atual</button>
-        <details><summary>Análise de estruturas</summary>
-            <div id="structural-techniques" class="techniques"></div>
-        </details>
-        <details><summary>Ajustes de imagem</summary>
-            <div id="adjustments"></div>
-            <button data-action="reset" data-document>Restaurar original</button>
-        </details>
-        <details><summary>Análise avançada</summary>
-            <label>Área de processamento
-                <select id="region">
-                    <option value="selection">Seleção, quando presente</option><option value="full">Imagem inteira</option>
-                    <option value="auto">Sugerir região</option><option value="saved">Região de referência</option>
-                </select>
-            </label>
-            <div class="commands"><button data-adjust="equalize:1" data-document>Equalizar</button>
-                <button data-adjust="channel:0" data-document>Canal R</button>
-                <button data-adjust="channel:1" data-document>Canal G</button>
-                <button data-adjust="channel:2" data-document>Canal B</button></div>
-            <div class="advanced-buttons">
-                <button data-adjust="clahe:2" data-document title="Equalização de luminância com limite 2">Contraste local</button>
-                <button data-adjust="decorrelation:1" data-document title="Decorrelation stretch com percentis 2 e 98">Separar cores</button>
-                <button data-adjust="pca:0" data-document title="Primeiro componente principal de RGB">PCA 1</button>
-                <button data-adjust="pca:1" data-document title="Segundo componente principal de RGB">PCA 2</button>
-                <button data-adjust="pca:2" data-document title="Terceiro componente principal de RGB">PCA 3</button>
-                <button data-adjust="hsv:0" data-document>Matiz</button>
-                <button data-adjust="hsv:1" data-document>Saturação HSV</button>
-                <button data-adjust="hsv:2" data-document>Valor HSV</button>
-                <button data-adjust="lab:0" data-document>Lab L*</button>
-                <button data-adjust="lab:1" data-document>Lab a*</button>
-                <button data-adjust="lab:2" data-document>Lab b*</button>
-            </div>
-            <label>Presets <select id="presets"></select></label>
-            <div class="commands"><button data-action="save-preset">Salvar preset</button><button data-action="remove-preset">Remover</button></div>
-            <div class="commands"><button data-action="import-preset">Importar</button><button data-action="export-preset">Exportar</button>
-                <button data-action="paste-preset" data-document>Aplicar ajustes salvos</button></div>
-        </details>
+        <div class="tool-tabs" role="tablist" aria-label="Ferramentas de processamento">
+            <button type="button" role="tab" id="tool-enhance" aria-controls="enhance-tools" aria-selected="true">Realce</button>
+            <button type="button" role="tab" id="tool-classic" aria-controls="classic-tools" aria-selected="false" tabindex="-1">Filtros clássicos</button>
+        </div>
+        <section role="tabpanel" id="enhance-tools" aria-labelledby="tool-enhance">
+            <h2>Realce arqueológico</h2>
+            <fieldset id="primary-techniques" class="techniques"><legend class="sr-only">Técnica de realce</legend></fieldset>
+            <label class="slider-row" for="strength">Intensidade <output id="strength-value">85%</output></label>
+            <input type="range" id="strength" min="0" max="1" value="0.85" step="0.01">
+            <div class="region-label" id="region-label" aria-live="polite">Área · imagem inteira</div>
+            <button class="primary apply-button" data-action="infer" data-document>Aplicar realce</button>
+            <button id="cancel-photo" data-action="cancel-photo" hidden>Cancelar após o cálculo atual</button>
+            <details><summary>Análise de estruturas</summary>
+                <div id="structural-techniques" class="techniques"></div>
+            </details>
+            <details><summary>Ajustes de imagem</summary>
+                <div id="adjustments"></div>
+                <button data-action="reset" data-document>Restaurar original</button>
+            </details>
+            <details><summary>Presets</summary>
+                <label>Presets <select id="presets"></select></label>
+                <div class="commands"><button data-action="save-preset">Salvar preset</button><button data-action="remove-preset">Remover</button></div>
+                <div class="commands"><button data-action="import-preset">Importar</button><button data-action="export-preset">Exportar</button>
+                    <button data-action="paste-preset" data-document>Aplicar ajustes salvos</button></div>
+            </details>
+        </section>
+        <section role="tabpanel" id="classic-tools" aria-labelledby="tool-classic" tabindex="0" hidden>
+            <fieldset class="filter-group">
+                <legend>Contraste e cor</legend>
+                <button type="button" data-adjust="equalize:1" data-document>Equalizar histograma</button>
+                <button type="button" data-adjust="clahe:2" data-document>Contraste local (CLAHE)</button>
+                <button type="button" data-adjust="decorrelation:1" data-document>Separar cores</button>
+            </fieldset>
+            <fieldset class="filter-group">
+                <legend>Canais RGB</legend>
+                <button type="button" data-adjust="channel:0" data-document>Vermelho</button>
+                <button type="button" data-adjust="channel:1" data-document>Verde</button>
+                <button type="button" data-adjust="channel:2" data-document>Azul</button>
+            </fieldset>
+            <fieldset class="filter-group">
+                <legend>Componentes principais (PCA)</legend>
+                <button type="button" data-adjust="pca:0" data-document>Componente 1</button>
+                <button type="button" data-adjust="pca:1" data-document>Componente 2</button>
+                <button type="button" data-adjust="pca:2" data-document>Componente 3</button>
+            </fieldset>
+            <fieldset class="filter-group">
+                <legend>Canais HSV</legend>
+                <button type="button" data-adjust="hsv:0" data-document>Matiz</button>
+                <button type="button" data-adjust="hsv:1" data-document>Saturação</button>
+                <button type="button" data-adjust="hsv:2" data-document>Valor</button>
+            </fieldset>
+            <fieldset class="filter-group">
+                <legend>Canais Lab</legend>
+                <button type="button" data-adjust="lab:0" data-document>Luminosidade L*</button>
+                <button type="button" data-adjust="lab:1" data-document>Canal a*</button>
+                <button type="button" data-adjust="lab:2" data-document>Canal b*</button>
+            </fieldset>
+        </section>
         <details open><summary>Resultados</summary>
             <label class="sr-only" for="maps">Resultado ou mapa ativo</label>
             <select id="maps" data-document><option value="original">Original</option></select>
@@ -259,12 +293,6 @@
         <label class="choice"><input class="choice-input" type="checkbox" name="favorite"><span>Somente favoritos</span></label>
         <label class="choice"><input class="choice-input" type="checkbox" name="metadata"><span>Incluir parâmetros</span></label>
         <div class="commands"><button value="cancel" formnovalidate>Cancelar</button><button class="primary" value="confirm">Escolher destino</button></div>
-    </form></dialog>
-    <dialog id="help"><form method="dialog"><h2>Atalhos e limites científicos</h2>
-        <p><kbd>Ctrl+O</kbd> Importar · <kbd>Ctrl+S</kbd> Salvar · <kbd>Ctrl+W</kbd> Fechar aba</p>
-        <p><kbd>R</kbd> Selecionar região · <kbd>M</kbd> Mover · <kbd>Esc</kbd> Limpar · <kbd>0</kbd> Ajustar</p>
-        <p>O realce visual auxilia a inspeção. Ele não confirma pigmentos, autenticidade ou profundidade.</p>
-        <button>Fechar</button>
     </form></dialog>
 </section>
 <script>

@@ -27,11 +27,29 @@ export const adjustments = {
     lab: ["Canal Lab", 0, 2, 1]
 };
 
+export const classicFilters = {
+    classic_equalize_1: ["Equalizar histograma", "Contraste e cor"],
+    classic_clahe_2: ["Contraste local (CLAHE)", "Contraste e cor"],
+    classic_decorrelation_1: ["Separar cores", "Contraste e cor"],
+    classic_channel_0: ["Vermelho", "RGB"],
+    classic_channel_1: ["Verde", "RGB"],
+    classic_channel_2: ["Azul", "RGB"],
+    classic_pca_0: ["Componente 1", "PCA"],
+    classic_pca_1: ["Componente 2", "PCA"],
+    classic_pca_2: ["Componente 3", "PCA"],
+    classic_hsv_0: ["Matiz", "HSV"],
+    classic_hsv_1: ["Saturação", "HSV"],
+    classic_hsv_2: ["Valor", "HSV"],
+    classic_lab_0: ["Luminosidade L*", "Lab"],
+    classic_lab_1: ["Canal a*", "Lab"],
+    classic_lab_2: ["Canal b*", "Lab"]
+};
+
 export const neural = new Set(["adaptativo", "cromatico", "combinado"]);
 export const intensity = new Set(["cromatico", "combinado"]);
 
 export function techniqueName(key) {
-    return techniques[key]?.[0] ?? (key === "original" ? "Original" : "Resultado");
+    return techniques[key]?.[0] ?? classicFilters[key]?.[0] ?? (key === "original" ? "Original" : "Resultado");
 }
 
 export function element(name, text = "", attrs = {}) {

@@ -1,13 +1,35 @@
 <link rel="stylesheet" href="{{ static('editor/css/tokens.css') }}">
 <link rel="stylesheet" href="{{ static('editor/css/studio.css') }}">
-<main class="ocre studio-home">
-    <img width="68" height="68" src="{{ static('editor/mark.svg') }}" alt="">
-    <h1>Ocre Studio</h1>
-    <p>Archaeological Imaging &amp; AI</p>
-    <a class="primary" href="/editor" data-vela-link data-vela-route="/editor">Abrir editor</a>
-    <details>
-        <summary>Sobre</summary>
-        <p>v0.1.0-alpha · Marinaldo da Costa Barroso Filho</p>
-        <p>github.com/zxlawdx/ocre-studio</p>
-    </details>
+<link rel="stylesheet" href="{{ static('home/css/home.css') }}">
+<main class="ocre studio-home" id="ocre-home">
+    <div class="home-frame">
+        <header class="home-bar">
+            <img width="36" height="36" src="{{ static('editor/mark.svg') }}" alt="">
+            <span>Ocre Studio</span>
+            <nav class="home-navigation" aria-label="Navegação inicial">
+                <a href="/home" data-vela-link {{ home_current }}>Início</a>
+                <a href="/recent" data-vela-link {{ recent_current }}>Projetos recentes</a>
+                <a href="/about" data-vela-link {{ about_current }}>Sobre</a>
+            </nav>
+            <span class="home-version">{{ app_version }}</span>
+        </header>
+        {{ page_content }}
+        <p id="home-status" role="status"></p>
+    </div>
 </main>
+<script>
+    (() => {
+        const root = document.getElementById("ocre-home");
+        const events = new AbortController();
+        window.VelaPage = {
+            mounted() {
+                import("{{ static('home/js/home.js') }}").then(({ mount }) => {
+                    if (!events.signal.aborted) mount(root, events.signal);
+                }).catch(() => {
+                    root.querySelector("#home-status").textContent = "Falha ao iniciar a tela inicial.";
+                });
+            },
+            beforeUnmount() { events.abort(); }
+        };
+    })();
+</script>

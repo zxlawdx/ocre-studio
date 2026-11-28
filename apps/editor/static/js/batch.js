@@ -1,4 +1,4 @@
-import { element, techniqueName, techniques } from "./techniques.js";
+import { classicFilters, element, techniqueName, techniques } from "./techniques.js";
 
 const labels = {
     queued: "Na fila", running: "Processando", done: "Concluída",
@@ -22,18 +22,42 @@ export class BatchView {
             label.append(input, element("span", name));
             methods.append(label);
         }
+        const classic = root.querySelector("#batch-classic-methods");
+        let section;
+        let group;
+        for (const [key, [name, category]] of Object.entries(classicFilters)) {
+            if (group !== category) {
+                group = category;
+                section = element("fieldset");
+                section.append(element("legend", category));
+                classic.append(section);
+            }
+            const label = element("label", "", { class: "choice" });
+            label.append(element("input", "", {
+                type: "checkbox", class: "choice-input", name: "method", value: key
+            }), element("span", name));
+            section.append(label);
+        }
+        const updateCount = () => {
+            const count = classic.querySelectorAll("input:checked").length;
+            root.querySelector("#batch-classic-count").textContent = count ? `${count} selecionados` : "";
+        };
+        classic.addEventListener("change", updateCount, { signal });
         this.form.querySelector("#batch-preset").addEventListener("change", (event) => {
             const preset = this.catalog.catalog?.presets[event.target.value];
             if (!preset) return;
             this.form.querySelectorAll('[name="method"]').forEach((input) => {
                 input.checked = input.value === preset.technique;
             });
+            updateCount();
             this.form.elements.strength.value = Math.round(preset.strength * 100);
         }, { signal });
         this.form.addEventListener("submit", (event) => {
             event.preventDefault();
             void this.start();
         }, { signal });
+        const ticker = setInterval(() => this.updateElapsed(), 1000);
+        signal.addEventListener("abort", () => clearInterval(ticker), { once: true });
         root.querySelector('[data-screen="batch"]').addEventListener("click", (event) => {
             const button = event.target.closest("[data-batch]");
             if (!button) return;
@@ -45,6 +69,8 @@ export class BatchView {
     }
 
     async start() {
+        if (this.starting || this.state?.running) return;
+        this.starting = true;
         const data = new FormData(this.form);
         const scope = data.get("scope");
         const active = this.catalog.photo;
@@ -67,18 +93,35 @@ export class BatchView {
         } catch (error) {
             this.report(error.message);
             this.form.querySelector("#start-batch").disabled = false;
+        } finally {
+            this.starting = false;
         }
+    }
+
+    updateElapsed() {
+        if (!this.current?.started_at) return;
+        const seconds = Math.max(0, Math.floor(Date.now() / 1000 - this.current.started_at));
+        const elapsed = seconds < 60 ? `${seconds} s` :
+            `${Math.floor(seconds / 60)} min ${seconds % 60} s`;
+        this.root.querySelector("#queue-elapsed").textContent = elapsed;
+        const cell = this.root.querySelector("#queue [data-elapsed]");
+        if (cell) cell.textContent = elapsed;
     }
 
     render(state) {
         this.state = state;
         const count = state.tasks.filter((task) => !["queued", "running"].includes(task.state)).length;
-        const current = state.tasks.find((task) => task.state === "running");
+        const current = this.current = state.tasks.find((task) => task.state === "running");
         const queue = this.root.querySelector("#queue");
-        const title = state.tasks.length ?
-            `${count} de ${state.tasks.length} tarefas · ${state.paused ? "Pausado" : current?.photo ?? (state.running ? "Em andamento" : "Fila encerrada")}` :
-            "Fila de processamento";
-        this.root.querySelector("#queue-status").textContent = title;
+        const failed = state.tasks.filter((task) => task.state === "failed").length;
+        const activity = current ? `${techniqueName(current.technique)} · ${current.photo}` :
+            state.paused ? "Pausado" : state.running ? "Em andamento" : "Fila encerrada";
+        const parts = [`${count} de ${state.tasks.length} tarefas`, activity];
+        if (current && state.paused) parts.push("Pausa após esta tarefa");
+        if (failed) parts.push(`${failed} com falha`);
+        this.root.querySelector("#queue-status").textContent = state.tasks.length ?
+            parts.join(" · ") : "Fila de processamento";
+        this.root.querySelector("#queue-elapsed").textContent = "";
         this.root.querySelector("#queue-progress").max = Math.max(state.tasks.length, 1);
         this.root.querySelector("#queue-progress").value = count;
         this.form.querySelector("#start-batch").disabled = state.running;
@@ -97,6 +140,7 @@ export class BatchView {
                 [labels[task.state], task.device?.toUpperCase(), task.error].filter(Boolean).join(" · "),
                 task.seconds ? `${task.seconds.toFixed(2)} s` : "—"
             ]) row.append(element("td", text));
+            if (task === current) row.lastElementChild.setAttribute("data-elapsed", "");
             const actions = element("td");
             if (["queued", "done"].includes(task.state)) {
                 actions.append(element("button", task.state === "queued" ? "Cancelar" : "Abrir", {
@@ -107,5 +151,6 @@ export class BatchView {
             row.append(actions);
             return row;
         }));
+        this.updateElapsed();
     }
 }

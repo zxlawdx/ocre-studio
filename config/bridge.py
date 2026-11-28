@@ -6,19 +6,24 @@ import json
 from concurrent.futures import Future
 from dataclasses import asdict
 from pathlib import Path
+from shutil import copyfile, rmtree
+from tempfile import mkdtemp
 from threading import Event, RLock
 from time import perf_counter
 
 import numpy as np
 from PIL import Image
 from vela.core.bridge import BaseBridge
+from vela.static import StaticResolver
 from webview import FileDialog
 
-from apps.editor.service import Adjustment, ImageDocument, histogram, preview
+from apps.editor.service import Adjustment, ImageDocument, histogram, preview, validate_regions
 from apps.model_library.service import KokentauModel
-from apps.projects.bridge import CatalogCommands
+from apps.projects.bridge import CLASSIC_FILTERS, CatalogCommands
 from apps.projects.catalog import Catalog, Session
 from config.composition import Workspace
+
+TUTORIAL_IMAGES = ("serra-da-capivara.jpg", "jarro-de-malqata.jpg")
 
 NEURAL_PRESETS = {"adaptativo", "cromatico", "combinado"}
 STRUCTURAL_PRESETS = {
@@ -44,6 +49,7 @@ class EditorBridge(CatalogCommands, BaseBridge):
         self._state_lock = RLock()
         self._busy = False
         self._pending: dict[str, Event] = {}
+        self._initial_view = True
 
     def _file(self, description: str, *, save_as: str = "") -> Path | None:
         if self._window is None:
@@ -77,15 +83,19 @@ class EditorBridge(CatalogCommands, BaseBridge):
             "provenance": document.provenance,
         }
         catalog, photo = self._workspace.catalog, self._workspace.photo
+        session = (
+            catalog.sessions.get(photo, Session())
+            if catalog and photo
+            else (self._workspace.standalone_view)
+        )
+        snapshot.update(
+            roi=session.roi,
+            regions=session.regions or ([session.roi] if session.roi else []),
+            active_region=session.active_region,
+            view=session.view,
+        )
         if catalog and photo:
-            session = catalog.sessions.get(photo, Session())
-            snapshot.update(
-                photo=photo,
-                roi=session.roi,
-                view=session.view,
-                results=self._store(photo).list(),
-                dirty=catalog.dirty,
-            )
+            snapshot.update(photo=photo, results=self._store(photo).list(), dirty=catalog.dirty)
         if include_original:
             snapshot["original"] = preview(document.original)
         return snapshot
@@ -134,6 +144,14 @@ class EditorBridge(CatalogCommands, BaseBridge):
         with self._state_lock:
             if self._busy:
                 return {"busy": True}
+            if self._initial_view:
+                self._initial_view = False
+                if self._workspace.document is None and self._workspace.catalog is None:
+                    try:
+                        sample = self._editor_asset("amostra-inicial.png")
+                        self._workspace.document = ImageDocument.open(sample)
+                    except (OSError, ValueError) as exc:
+                        self.logger.warning(f"Amostra inicial indisponível: {type(exc).__name__}")
             model = self._workspace.model
             return {
                 "document": self._snapshot(include_original=True)
@@ -153,28 +171,65 @@ class EditorBridge(CatalogCommands, BaseBridge):
         except (ImportError, OSError, RuntimeError):
             return {"cuda": False}
 
+    def _editor_asset(self, relative: str) -> Path:
+        assets = StaticResolver.for_project(
+            collected_root=self.config.get("static_root", "staticfiles"),
+        )
+        return assets.resolve_collected(f"editor/{relative}")
+
+    def _load_photo(self, path: Path) -> dict:
+        document = ImageDocument.open(path)
+        catalog = self._workspace.catalog
+        if catalog and document.source.resolve().is_relative_to(catalog.root):
+            key = document.source.resolve().relative_to(catalog.root).as_posix()
+            if key not in catalog.photos:
+                catalog.photos = sorted([*catalog.photos, key], key=str.casefold)
+                catalog.dirty = True
+            self._workspace.photo = key
+        else:
+            self._workspace.photo = None
+            self._workspace.standalone_view = Session()
+        self._workspace.document = document
+        return {"document": self._snapshot(include_original=True)}
+
     def ocre_open(self) -> bool:
         """Select a photograph in a native file dialog."""
         with self._state_lock:
             path = self._file("Fotografias (*.jpg;*.jpeg;*.png;*.tif;*.tiff;*.webp)")
-            if path is None:
+            return self._run(self._load_photo, path) if path else False
+
+    def ocre_open_example(self, name: str) -> bool:
+        """Open one of the bundled public photographs in the editor."""
+        if name not in TUTORIAL_IMAGES:
+            raise ValueError("Exercício desconhecido.")
+        with self._state_lock:
+            return self._run(self._load_photo, self._editor_asset(f"tutorial/{name}"))
+
+    def ocre_practice_project(self) -> bool:
+        """Create a writable project with the two credited teaching photographs."""
+        with self._state_lock:
+            parent = self._folder()
+            if parent is None:
                 return False
 
-            def load() -> dict:
-                document = ImageDocument.open(path)
-                catalog = self._workspace.catalog
-                if catalog and document.source.resolve().is_relative_to(catalog.root):
-                    key = document.source.resolve().relative_to(catalog.root).as_posix()
-                    if key not in catalog.photos:
-                        catalog.photos = sorted([*catalog.photos, key], key=str.casefold)
-                        catalog.dirty = True
-                    self._workspace.photo = key
-                else:
-                    self._workspace.photo = None
-                self._workspace.document = document
-                return {"document": self._snapshot(include_original=True)}
+            def create() -> dict:
+                path = Path(mkdtemp(prefix="Ocre-Pratica-", dir=parent))
+                try:
+                    for filename in (*TUTORIAL_IMAGES, "proveniencia.json"):
+                        copyfile(self._editor_asset(f"tutorial/{filename}"), path / filename)
+                    catalog = Catalog.scan(
+                        path, recursive=False, name="Prática de realce arqueológico"
+                    )
+                    return {
+                        **self._switch_catalog(catalog),
+                        "screen": "projects",
+                        "message": "Projeto de prática criado.",
+                    }
+                except Exception:
+                    rmtree(path, ignore_errors=True)
+                    raise
 
-            return self._run(load)
+            return self._run(create)
 
     def ocre_load_model(self, device: str) -> bool:
         """Load a local V7 checkpoint pair and V8 metadata archive."""
@@ -191,21 +246,8 @@ class EditorBridge(CatalogCommands, BaseBridge):
 
             return self._run(load)
 
-    def _infer(
-        self,
-        document: ImageDocument,
-        preset: str,
-        strength: float,
-        region: list | str | None,
-        device: str,
-        announce: bool = True,
-    ) -> None:
-        from apps.model_library.kokentau.kokentau_v8 import auto_roi, enhance, rectmask
-
-        if preset not in NEURAL_PRESETS | STRUCTURAL_PRESETS:
-            raise ValueError("Ferramenta Kokentau desconhecida.")
-        if not 0 <= strength <= 1:
-            raise ValueError("A intensidade deve estar entre zero e um.")
+    def _region_mask(self, document: ImageDocument, region: list | str | None):
+        from apps.model_library.kokentau.kokentau_v8 import auto_roi, rectmask
 
         pixels = np.asarray(document.original)
         mask = None
@@ -232,16 +274,55 @@ class EditorBridge(CatalogCommands, BaseBridge):
             if mask is None or not mask.any():
                 raise ValueError("A ROI histórica está vazia ou não é reconhecida.")
         elif region is not None:
-            if (
-                not isinstance(region, list)
-                or len(region) != 4
-                or any(type(item) is not int for item in region)
-            ):
-                raise ValueError("Região inválida.")
-            left, top, right, bottom = region
-            if not (0 <= left < right <= pixels.shape[1] and 0 <= top < bottom <= pixels.shape[0]):
-                raise ValueError("Selecione uma região dentro da fotografia.")
-            mask = rectmask(pixels.shape, region)
+            rectangular = isinstance(region, list) and all(type(n) is int for n in region)
+            boxes = [region] if rectangular else region
+            for box in validate_regions(boxes, document.original.size):
+                rectangle = rectmask(pixels.shape, box)
+                mask = rectangle if mask is None else mask | rectangle
+        return mask
+
+    def _batch_filter(self, document: ImageDocument, key: str, region: list | str | None) -> None:
+        start = perf_counter()
+        operation, value = CLASSIC_FILTERS[key]
+        source = document.original
+        if region == "auto":
+            mask = Image.fromarray(self._region_mask(document, region))
+            bounds = mask.getbbox()
+            if bounds is None:
+                raise ValueError("Nenhuma região automática encontrada.")
+            output = source.copy()
+            filtered = Adjustment(operation, value).apply(source.crop(bounds))
+            output.paste(filtered, bounds, mask.crop(bounds))
+        else:
+            boxes = (
+                region if region and isinstance(region[0], list) else ([region] if region else None)
+            )
+            output = Adjustment(operation, value, regions=boxes).apply(source)
+        document.maps[key] = output
+        document.selected_map = key
+        document.provenance = {
+            "kind": "classical",
+            "preset": key,
+            "roi": region,
+            "filter": {"name": operation, "value": value},
+            "seconds": perf_counter() - start,
+        }
+
+    def _infer(
+        self,
+        document: ImageDocument,
+        preset: str,
+        strength: float,
+        region: list | str | None,
+        device: str,
+        announce: bool = True,
+    ) -> None:
+        from apps.model_library.kokentau.kokentau_v8 import enhance
+
+        if preset not in self._techniques or not 0 <= strength <= 1:
+            raise ValueError("Técnica ou intensidade inválida.")
+        pixels = np.asarray(document.original)
+        mask = self._region_mask(document, region)
 
         start = perf_counter()
         model = None
@@ -375,7 +456,7 @@ class EditorBridge(CatalogCommands, BaseBridge):
 
             return self._run(process)
 
-    def ocre_edit(self, operation: str, value: str | float) -> bool:
+    def ocre_edit(self, operation: str, value: str | float, regions: list | None = None) -> bool:
         """Adjust rendering, select a map, or move through adjustment history."""
         with self._state_lock:
             document = self._document()
@@ -396,7 +477,8 @@ class EditorBridge(CatalogCommands, BaseBridge):
                         raise ValueError("Ajustes copiados excedem o limite do histórico.")
                     pending = [Adjustment(**item) for item in value]
                     for step in pending:
-                        step.apply(Image.new("RGB", (1, 1)))
+                        validate_regions(step.regions or [], document.original.size)
+                        Adjustment(step.name, step.value).apply(Image.new("RGB", (2, 2)))
                     for step in pending:
                         document.add(step)
                 elif operation == "history" and type(value) is int:
@@ -409,7 +491,7 @@ class EditorBridge(CatalogCommands, BaseBridge):
                     document.cursor = 0
                     document.selected_map = "original"
                 else:
-                    document.add(Adjustment(operation, float(value)))
+                    document.add(Adjustment(operation, float(value), regions=regions))
                 self._record(document)
                 return {"document": self._snapshot()}
 
@@ -444,8 +526,20 @@ class EditorBridge(CatalogCommands, BaseBridge):
                         }
                     if path.resolve() == document.source.resolve():
                         raise ValueError("O projeto não pode sobrescrever a fotografia.")
-                    self._workspace.projects.save(path, document)
-                    return {"message": "Projeto salvo."}
+                    session = self._workspace.standalone_view
+                    self._workspace.projects.save(
+                        path,
+                        document,
+                        {
+                            "regions": session.regions,
+                            "active": session.active_region,
+                            "view": session.view,
+                        },
+                    )
+                    return {
+                        "message": "Projeto salvo.",
+                        "recent": self._remember_single(path, document),
+                    }
 
                 return self._run(save)
             if action != "open":
@@ -454,39 +548,67 @@ class EditorBridge(CatalogCommands, BaseBridge):
             if path is None:
                 return False
 
-            def load() -> dict:
-                if path.stat().st_size > 32 * 1024**2:
-                    raise ValueError("O projeto excede o tamanho permitido.")
-                data = json.loads(path.read_text(encoding="utf-8"))
-                if data.get("version") == 2:
-                    catalog = Catalog.open(path, data)
-                    result = self._switch_catalog(catalog)
-                    return {**result, "recent": self._remember(catalog)}
-                document, provenance, selected = self._workspace.projects.open(path)
-                if provenance:
-                    hashes = ("grade_sha256", "adaptive_sha256")
-                    if any(key in provenance for key in hashes):
-                        model = self._workspace.native_models.model("auto")
-                        if any(
-                            getattr(model.manifest, key) != provenance.get(key) for key in hashes
-                        ):
-                            raise ValueError("O par nativo não corresponde aos hashes do projeto.")
-                    with self._workspace.inference_lock:
-                        self._infer(
-                            document,
-                            provenance.get("preset", "combinado"),
-                            provenance["strength"],
-                            provenance["roi"],
-                            "auto",
-                        )
-                if selected != "original" and selected not in document.maps:
-                    raise ValueError("O projeto referencia um mapa indisponível.")
-                document.selected_map = selected
-                state = self._switch_catalog(None)
-                self._workspace.document = document
-                return {**state, "clear": False, "document": self._snapshot(include_original=True)}
+            return self._run(self._load_project, path)
 
-            return self._run(load)
+    def _remember_single(self, path: Path, document: ImageDocument) -> list[dict]:
+        try:
+            self._workspace.recent.remember_file(path, path.stem, document.source.parent, 1)
+        except OSError as error:
+            self.logger.warning(f"Falha ao atualizar projetos recentes: {type(error).__name__}")
+        return self.ocre_recent()
+
+    def _load_project(self, path: Path) -> dict:
+        if path.stat().st_size > 32 * 1024**2:
+            raise ValueError("O projeto excede o tamanho permitido.")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if data.get("version") == 2:
+            catalog = Catalog.open(path, data)
+            result = self._switch_catalog(catalog)
+            return {**result, "recent": self._remember(catalog)}
+        document, provenance, selected = self._workspace.projects.open(path)
+        if provenance:
+            hashes = ("grade_sha256", "adaptive_sha256")
+            if any(key in provenance for key in hashes):
+                model = self._workspace.native_models.model("auto")
+                if any(getattr(model.manifest, key) != provenance.get(key) for key in hashes):
+                    raise ValueError("O par nativo não corresponde aos hashes do projeto.")
+            with self._workspace.inference_lock:
+                self._infer(
+                    document,
+                    provenance.get("preset", "combinado"),
+                    provenance["strength"],
+                    provenance["roi"],
+                    "auto",
+                )
+        if selected != "original" and selected not in document.maps:
+            raise ValueError("O projeto referencia um mapa indisponível.")
+        document.selected_map = selected
+        selection = data.get("selection", {})
+        if not isinstance(selection, dict):
+            raise ValueError("Seleção do projeto inválida.")
+        regions = validate_regions(selection.get("regions", []), document.original.size)
+        active = selection.get("active", 0)
+        view = selection.get("view", {})
+        if (
+            type(active) is not int
+            or not 0 <= active < max(1, len(regions))
+            or not isinstance(view, dict)
+        ):
+            raise ValueError("Seleção do projeto inválida.")
+        state = self._switch_catalog(None)
+        self._workspace.document = document
+        self._workspace.standalone_view = Session(
+            roi=regions[active] if regions else None,
+            regions=regions,
+            active_region=active,
+            view=view,
+        )
+        return {
+            **state,
+            "clear": False,
+            "document": self._snapshot(include_original=True),
+            "recent": self._remember_single(path, document),
+        }
 
     def ocre_export(self) -> bool:
         """Export the displayed result without overwriting an existing file."""

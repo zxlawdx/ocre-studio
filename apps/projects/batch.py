@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from logging import getLogger
 from threading import Condition
-from time import perf_counter
+from time import perf_counter, time
 from typing import Callable
+
+logger = getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -19,6 +22,7 @@ class Task:
     error: str = ""
     result: str = ""
     device: str = ""
+    started_at: float = 0
 
 
 class Batch:
@@ -51,6 +55,7 @@ class Batch:
                     if task.state in {"queued", "running"}:
                         task.state = "cancelled"
                         task.error = "Sessão anterior encerrada"
+                        task.started_at = 0
                     tasks.append(task)
                 except (ValueError, TypeError):
                     continue
@@ -96,21 +101,32 @@ class Batch:
                     if task.state != "queued":
                         continue
                     task.state = "running"
+                    task.started_at = time()
                 notify()
                 start = perf_counter()
                 try:
                     result = process(task)
-                except (OSError, ImportError, ValueError, RuntimeError) as error:
+                    identifier = result.get("id", "")
+                    device = result.get("device", "")
+                except Exception as error:
+                    kind = type(error)
+                    detail = f"{kind.__module__}.{kind.__name__}"
+                    logger.warning("Tarefa de lote %s falhou (%s)", task.technique, detail)
                     with self._condition:
                         task.state = "failed"
-                        task.error = str(error)
+                        task.error = (
+                            str(error)
+                            if isinstance(error, (OSError, ImportError, ValueError, RuntimeError))
+                            else f"Falha durante o cálculo ({detail})."
+                        )
                 else:
                     with self._condition:
                         task.state = "done" if result else "skipped"
-                        task.result = result.get("id", "")
-                        task.device = result.get("device", "")
+                        task.result = identifier
+                        task.device = device
                 with self._condition:
                     task.seconds = perf_counter() - start
+                    task.started_at = 0
                 notify()
         finally:
             with self._condition:

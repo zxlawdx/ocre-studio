@@ -1,0 +1,110 @@
+    <section class="workspace-page help-page" data-screen="help" aria-labelledby="help-title" hidden>
+        <div class="guide">
+            <header class="guide-intro">
+                <h1 id="help-title">Guia de fotografia arqueológica</h1>
+                <p>Do registro de campo à comparação de realces. Pratique no editor com fotografias públicas da Serra da Capivara e de uma cerâmica de Malqata.</p>
+            </header>
+            <div class="guide-nav" role="tablist" aria-label="Capítulos do tutorial">
+                <button type="button" role="tab" id="guide-tab-field" aria-controls="guide-field" aria-selected="true">Registro</button>
+                <button type="button" role="tab" id="guide-tab-lab" aria-controls="guide-lab" aria-selected="false" tabindex="-1">Exercícios</button>
+                <button type="button" role="tab" id="guide-tab-batch" aria-controls="guide-batch" aria-selected="false" tabindex="-1">Lote e exportação</button>
+                <button type="button" role="tab" id="guide-tab-tools" aria-controls="guide-tools" aria-selected="false" tabindex="-1">Ferramentas e atalhos</button>
+            </div>
+
+            <article id="guide-field" class="guide-section" role="tabpanel" aria-labelledby="guide-tab-field" tabindex="0">
+                <h2>Do campo ao laboratório</h2>
+                <ol class="guide-steps">
+                    <li><strong>Registre o contexto e o detalhe.</strong> Identifique a foto e o painel. Anote iluminação, orientação e equipamento. Quando adequado, use escala no plano do motivo e referência de cor. Em gravuras, teste luz rasante de direções diferentes.</li>
+                    <li><strong>Preserve a captura original.</strong> Guarde o RAW e os metadados em seu arquivo de trabalho. Importe uma cópia RGB compatível, de preferência TIFF ou PNG, e organize o conjunto em <b>Projetos</b>. Mantenha coordenadas sensíveis no arquivo de campo com acesso restrito.</li>
+                    <li><strong>Compare antes de interpretar.</strong> Diferenças realçadas podem vir de pigmento, iluminação, umidade, fissura ou textura. Confira o original, outros registros do painel e, quando possível, observações de campo. Use os pixels da seleção como referência de imagem e uma escala documentada para medir.</li>
+                </ol>
+                <p class="guide-sources">
+                    <a href="https://historicengland.org.uk/content/docs/research/historic-england-archaeological-recording-manual-2018/" target="_blank" rel="noopener noreferrer">Manual da Historic England</a>
+                    <a href="https://www.sciencedirect.com/science/article/pii/S2212054815000028" target="_blank" rel="noopener noreferrer">Estudo de realce no abrigo de El Carche</a>
+                    <a href="https://doi.org/10.1186/s40494-023-00940-5" target="_blank" rel="noopener noreferrer">Estudo comparativo entre RGB e hiperespectral</a>
+                </p>
+            </article>
+
+            <article id="guide-lab" class="guide-section" role="tabpanel" aria-labelledby="guide-tab-lab" tabindex="0" hidden>
+                <h2>Dois exercícios de realce</h2>
+                <section class="guide-example">
+                    <div class="guide-example-head">
+                        <div><h3>Serra da Capivara</h3><p>Observe como a separação de cores altera o contraste entre o motivo e a rocha.</p></div>
+                        <button type="button" class="primary" data-example="serra-da-capivara.jpg">Abrir foto no editor</button>
+                    </div>
+                    <div class="guide-compare">
+                        <figure><img loading="lazy" width="1280" height="853" src="{{ static('editor/tutorial/serra-da-capivara.jpg') }}" alt="Motivos rupestres na rocha da Serra da Capivara"><figcaption>Foto de referência</figcaption></figure>
+                        <figure><img loading="lazy" width="1280" height="853" src="{{ static('editor/tutorial/serra-da-capivara-realce.jpg') }}" alt="Mesma foto com diferenças de cor ampliadas"><figcaption>Separar cores · imagem inteira</figcaption></figure>
+                    </div>
+                    <ol class="guide-steps">
+                        <li>Abra a foto e escolha <b>Imagem inteira</b> em <b>Aplicar em</b>. Em <b>Filtros clássicos</b>, clique em <b>Separar cores</b> para reproduzir o exemplo.</li>
+                        <li>Em <b>Comparar</b>, mova o divisor. Use <b>Lado a lado</b> para examinar o motivo e uma porção de rocha adjacente sob o mesmo enquadramento.</li>
+                        <li>Use <b>Desfazer</b> para voltar à referência. Pressione <kbd>R</kbd> e desenhe uma área sobre o motivo. Clique em <b>Nova região</b> e marque a rocha adjacente. Alterne em <b>Região ativa</b> para aplicar e comparar cada área. Selecionar <b>Todas as regiões</b> aplica o filtro a cada área da entrada atual.</li>
+                        <li>Abra o <b>Histórico da fotografia</b> para conferir a ordem dos filtros e as coordenadas. Clique num estado para voltar a ele. Repetir o filtro aplica a operação ao resultado que estiver ativo.</li>
+                    </ol>
+                    <p class="guide-credit">Foto de LeonardoRamos. Cópia sem metadados, regravada em JPEG. A derivação aplica separação de cores. <a href="https://commons.wikimedia.org/wiki/File:Cave_Painting_Serra_da_Capivara.jpg" target="_blank" rel="noopener noreferrer">Ficha da fotografia</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>.</p>
+                </section>
+                <section class="guide-example">
+                    <div class="guide-example-head">
+                        <div><h3>Jarro pintado de Malqata</h3><p>Compare os traços pintados e a textura da cerâmica com contraste local.</p></div>
+                        <button type="button" class="primary" data-example="jarro-de-malqata.jpg">Abrir foto no editor</button>
+                    </div>
+                    <div class="guide-compare">
+                        <figure><img loading="lazy" width="685" height="1200" src="{{ static('editor/tutorial/jarro-de-malqata.jpg') }}" alt="Jarro de Malqata com motivos pintados em azul"><figcaption>Foto de referência</figcaption></figure>
+                        <figure><img loading="lazy" width="685" height="1200" src="{{ static('editor/tutorial/jarro-de-malqata-realce.jpg') }}" alt="Fotografia do jarro após ajuste de contraste local"><figcaption>Contraste local (CLAHE) · limite 2</figcaption></figure>
+                    </div>
+                    <ol class="guide-steps">
+                        <li>Abra a foto e escolha <b>Contraste local (CLAHE)</b> com <b>Imagem inteira</b>. Confira como o ajuste também acentua a textura do material.</li>
+                        <li>Desfaça a operação e experimente os <b>Canais RGB</b> um por vez, voltando à referência entre eles. Observe em qual canal as marcas se distinguem melhor.</li>
+                        <li>Em <b>Sobrepor</b>, ajuste a opacidade para localizar diferenças sem perder a referência. Use <b>Exportar</b> para salvar um derivado com nome próprio.</li>
+                    </ol>
+                    <p class="guide-credit">The Metropolitan Museum of Art, Rogers Fund, 1912, objeto 12.180.39. Cópia sem metadados, regravada em JPEG. A derivação aplica CLAHE. <a href="https://www.metmuseum.org/art/collection/search/551210" target="_blank" rel="noopener noreferrer">Ficha do acervo</a> · <a href="https://www.metmuseum.org/hubs/open-access" target="_blank" rel="noopener noreferrer">Open Access CC0</a>.</p>
+                </section>
+            </article>
+
+            <article id="guide-batch" class="guide-section" role="tabpanel" aria-labelledby="guide-tab-batch" tabindex="0" hidden>
+                <h2>Lote e entrega</h2>
+                <ol class="guide-steps">
+                    <li>Crie o projeto de prática e escolha uma pasta para receber as duas fotografias com seus créditos. O app cria uma subpasta própria para o exercício.</li>
+                    <li>Em <b>Processamento em lote</b>, selecione <b>Projeto inteiro</b> e <b>Imagem inteira</b>. Expanda <b>Filtros clássicos</b> e marque <b>Equalizar histograma</b> e <b>Contraste local (CLAHE)</b>. Desmarque os realces que não quer executar e clique em <b>Iniciar lote</b>.</li>
+                    <li>Acompanhe a tarefa ativa e seu tempo. <b>Pausar após tarefa atual</b> espera o cálculo em andamento. <b>Cancelar pendentes</b> retira as tarefas que ainda estão na fila. Depois de corrigir um problema, use <b>Reprocessar falhas</b>.</li>
+                    <li>Abra os resultados e compare com a fonte. Use <b>Exportar resultados</b> com metadados para levar os parâmetros, a região e o hash do original. No relatório, registre a ordem dos filtros e descreva o que observou, separando o resultado visual da interpretação arqueológica.</li>
+                </ol>
+                <button type="button" class="primary" data-action="practice-project">Criar projeto de prática…</button>
+                <p class="guide-sources"><a href="https://researchdata.se/en/catalogue/dataset/snd0882-1" target="_blank" rel="noopener noreferrer">Explorar o Swedish Rock Art Research Archives</a></p>
+            </article>
+
+            <article id="guide-tools" class="guide-section" role="tabpanel" aria-labelledby="guide-tab-tools" tabindex="0" hidden>
+                <h2>Ferramentas e atalhos</h2>
+                <details class="guide-methods">
+                    <summary>Como escolher um filtro</summary>
+                    <dl>
+                        <dt>Equalizar histograma</dt><dd>Redistribui intensidades. Compare a foto inteira para reconhecer áreas que ganharam contraste e ruído.</dd>
+                        <dt>Contraste local (CLAHE)</dt><dd>Realça diferenças em vizinhanças menores. Use para examinar detalhes quando a luz varia sobre a superfície.</dd>
+                        <dt>Canais RGB, HSV e Lab</dt><dd>Isolam componentes de cor ou luminosidade. Compare os canais voltando à referência entre operações.</dd>
+                        <dt>Separar cores e PCA</dt><dd>Separam variações cromáticas correlacionadas. As cores ou intensidades do resultado são representações calculadas.</dd>
+                        <dt>Realce e análise de estruturas</dt><dd>Geram resultados cromáticos, estruturais e mapas. Algumas opções precisam dos modelos locais. Em Detalhes técnicos você pode conferir o dispositivo.</dd>
+                    </dl>
+                </details>
+                <div class="guide-tool-grid">
+                    <section><h3>Fotografia e projeto</h3><dl>
+                        <dt><kbd>Ctrl</kbd> + <kbd>O</kbd></dt><dd>Importar fotografia.</dd>
+                        <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>O</kbd></dt><dd>Abrir pasta de fotografias.</dd>
+                        <dt><kbd>Ctrl</kbd> + <kbd>N</kbd></dt><dd>Criar projeto.</dd>
+                        <dt><kbd>Ctrl</kbd> + <kbd>S</kbd></dt><dd>Salvar projeto.</dd>
+                        <dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></dt><dd>Salvar uma cópia do projeto.</dd>
+                        <dt><kbd>Ctrl</kbd> + <kbd>W</kbd></dt><dd>Fechar aba.</dd>
+                        <dt><kbd>Ctrl</kbd> + <kbd>Tab</kbd></dt><dd>Alternar entre fotografias do projeto.</dd>
+                    </dl></section>
+                    <section><h3>Imagem e seleção</h3><dl>
+                        <dt><kbd>M</kbd></dt><dd>Mover imagem. Em Comparar, também arrasta o divisor.</dd>
+                        <dt><kbd>R</kbd></dt><dd>Desenhar, mover ou redimensionar região.</dd>
+                        <dt><kbd>Shift</kbd> + arrastar</dt><dd>Adicionar uma região no modo de seleção.</dd>
+                        <dt><kbd>Esc</kbd></dt><dd>Cancelar o desenho em curso ou remover a região ativa.</dd>
+                        <dt><kbd>0</kbd> · <kbd>+</kbd> · <kbd>−</kbd></dt><dd>Ajustar à tela, aproximar e afastar.</dd>
+                        <dt><kbd>Ctrl</kbd> + <kbd>Z</kbd> · <kbd>Ctrl</kbd> + <kbd>Y</kbd></dt><dd>Desfazer e refazer ajustes.</dd>
+                    </dl></section>
+                </div>
+            </article>
+        </div>
+    </section>

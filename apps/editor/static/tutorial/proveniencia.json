@@ -1,0 +1,54 @@
+{
+    "ocre_studio": "0.1.0-alpha",
+    "pillow": "12.2.0",
+    "numpy": "2.2.6",
+    "opencv": "4.13.0",
+    "examples": [
+        {
+            "source": "https://commons.wikimedia.org/wiki/File:Cave_Painting_Serra_da_Capivara.jpg",
+            "credit": "LeonardoRamos",
+            "license": "https://creativecommons.org/licenses/by-sa/4.0/",
+            "download_sha256": "afc9475df8dd418e2a13c36b2ac923bac7212f086af696c6fa738bed3601cfcb",
+            "input": "serra-da-capivara.jpg",
+            "input_sha256": "8582e4d891ed757d0fed1cab65cda1d673a67b2295b533ff680cb51c0cac4747",
+            "input_preparation": "Orientação EXIF aplicada, metadados removidos, JPEG qualidade 94",
+            "size": [
+                1280,
+                853
+            ],
+            "operations": [
+                {
+                    "name": "decorrelation",
+                    "value": 1,
+                    "region": null
+                }
+            ],
+            "preview": "serra-da-capivara-realce.jpg",
+            "preview_sha256": "bacfe6d524a84816a70e24c58a7b441991f3a897167d44d5a8a58b65792ec439",
+            "preview_format": "JPEG qualidade 92"
+        },
+        {
+            "source": "https://www.metmuseum.org/art/collection/search/551210",
+            "credit": "The Metropolitan Museum of Art, Rogers Fund, 1912 (12.180.39)",
+            "license": "https://creativecommons.org/publicdomain/zero/1.0/",
+            "download_sha256": "11e98277ab139e8685d757b1db58dd5f67c0c343289fbd916e416f3b0d2be74b",
+            "input": "jarro-de-malqata.jpg",
+            "input_sha256": "3fb82a9ef676f84f40736440b96f2910a4444934c8b6f3a023ec7609e2d24735",
+            "input_preparation": "Orientação EXIF aplicada, metadados removidos, JPEG qualidade 94",
+            "size": [
+                685,
+                1200
+            ],
+            "operations": [
+                {
+                    "name": "clahe",
+                    "value": 2,
+                    "region": null
+                }
+            ],
+            "preview": "jarro-de-malqata-realce.jpg",
+            "preview_sha256": "cc1aed9d9dec6a99b26b05fe3aad57e55a436494c0eab2dfec788f443d59b94e",
+            "preview_format": "JPEG qualidade 92"
+        }
+    ]
+}

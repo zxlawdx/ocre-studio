@@ -34,6 +34,8 @@ class Session:
     """Reopen an image with bounded state and persisted, external derivatives."""
 
     roi: list[int] | None = None
+    regions: list[list[int]] = field(default_factory=list)
+    active_region: int = 0
     history: list[dict] = field(default_factory=list)
     cursor: int = 0
     result: str = "original"
@@ -197,6 +199,8 @@ def vars_for_session(session: Session) -> dict:
     """Serialize a session without pixel buffers."""
     return {
         "roi": session.roi,
+        "regions": session.regions,
+        "active_region": session.active_region,
         "history": session.history,
         "cursor": session.cursor,
         "result": session.result,

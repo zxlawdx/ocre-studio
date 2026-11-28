@@ -13,7 +13,8 @@ export class Viewport {
         this.pan = [0, 0];
         this.mode = "pan";
         this.divider = 0.5;
-        this.roi = null;
+        this.regions = [];
+        this.activeRegion = 0;
         this.images = [];
         const observer = new ResizeObserver(() => this.draw());
         observer.observe(canvas);
@@ -23,16 +24,20 @@ export class Viewport {
         canvas.addEventListener("pointerup", () => this.finish(), { signal });
         canvas.addEventListener("pointercancel", () => this.cancel(), { signal });
         canvas.addEventListener("lostpointercapture", () => this.finish(), { signal });
-        canvas.addEventListener("keydown", (event) => {
-            if (event.key === "Escape") {
-                event.preventDefault();
-                this.cancel();
-            }
-        }, { signal });
         canvas.addEventListener("wheel", (event) => {
             event.preventDefault();
             this.changeZoom(event.deltaY < 0 ? 1.15 : 1 / 1.15);
         }, { signal, passive: false });
+    }
+
+    get roi() {
+        return this.regions[this.activeRegion] ?? null;
+    }
+
+    selectRegion(index) {
+        this.activeRegion = index;
+        this.draw();
+        this.onRegion?.();
     }
 
     async load(document, signal) {
@@ -49,7 +54,9 @@ export class Viewport {
         this.dimensions = [document.original_width ?? document.width, document.original_height ?? document.height];
         this.images = images;
         if (replacing) {
-            this.roi = Array.isArray(document.roi) ? document.roi : null;
+            this.addRegion = false;
+            this.regions = document.regions ?? (document.roi ? [document.roi] : []);
+            this.activeRegion = Math.min(document.active_region ?? 0, Math.max(0, this.regions.length - 1));
             if (typeof document.view?.zoom === "number" && Array.isArray(document.view.pan)) {
                 this.zoom = document.view.zoom;
                 this.pan = document.view.pan;
@@ -142,7 +149,18 @@ export class Viewport {
                 ctx.fillText("↔", split, y + height / 2 + 4);
             }
         }
-        if (this.roi && this.comparison !== "side") drawRegion(this.overlayContext, this.roi, bounds, this.dimensions);
+        if (this.comparison !== "side") {
+            const editing = this.drag?.mode === "roi" ? this.drag : null;
+            this.regions.forEach((region, index) => {
+                if (index !== editing?.index) {
+                    drawRegion(this.overlayContext, region, bounds, this.dimensions,
+                        index + 1, index === this.activeRegion);
+                }
+            });
+            if (editing?.draft) {
+                drawRegion(this.overlayContext, editing.draft, bounds, this.dimensions, editing.index + 1, true);
+            }
+        }
         this.update(Math.round(this.zoom * this.images[0].width / this.dimensions[0] * 100));
     }
 
@@ -165,15 +183,37 @@ export class Viewport {
     begin(event) {
         if (!this.images.length || event.button !== 0 || this.drag) return;
         const pointer = this.point(event);
-        const handle = this.target(pointer);
+        let index = this.activeRegion;
+        let handle = this.target(pointer);
+        const adding = this.mode === "roi" && (this.addRegion || event.shiftKey);
+        if (adding) handle = null;
+        if (this.mode === "roi") {
+            if (!handle) {
+                const bounds = this.bounds();
+                const hit = adding ? -1 : this.regions.findLastIndex((box) =>
+                    regionTarget(pointer, canvasRegion(box, bounds, this.dimensions)));
+                if (hit >= 0) {
+                    index = hit;
+                    handle = regionTarget(pointer, canvasRegion(this.regions[index], bounds, this.dimensions));
+                } else {
+                    index = this.regions.length;
+                    if (index >= 16) {
+                        this.onRegionLimit?.();
+                        return;
+                    }
+                }
+            }
+        }
         const [x, y, width, height] = this.bounds();
         if (this.mode === "roi" && !handle &&
             (pointer[0] < x || pointer[0] > x + width || pointer[1] < y || pointer[1] > y + height)) return;
+        this.addRegion = false;
         this.canvas.setPointerCapture(event.pointerId);
         this.drag = {
             id: event.pointerId, pointer, handle,
             point: toImage(pointer, this.bounds(), this.dimensions),
-            region: handle ? this.roi : null, previous: this.roi, mode: this.mode
+            index, region: handle ? this.regions[index] : null,
+            draft: handle ? this.regions[index] : null, mode: this.mode
         };
     }
 
@@ -195,23 +235,30 @@ export class Viewport {
             this.drag.pointer = pointer;
         } else {
             const region = changeRegion(this.drag, toImage(pointer, this.bounds(), this.dimensions), this.dimensions);
-            if (region) this.roi = region;
+            if (region) this.drag.draft = region;
         }
         this.draw();
     }
 
     finish() {
         if (!this.drag) return;
-        const changed = this.drag.mode === "roi" && this.roi !== this.drag.previous;
+        const { mode, draft, index } = this.drag;
         this.drag = null;
-        if (changed) this.onRegion?.(this.roi);
+        if (mode === "roi" && draft) {
+            this.regions[index] = draft;
+            this.selectRegion(index);
+        }
     }
 
     cancel() {
-        const previous = this.drag ? this.drag.previous : null;
-        this.drag = null;
-        this.roi = previous;
-        this.draw();
-        this.onRegion?.(this.roi);
+        if (this.drag) {
+            this.drag = null;
+            this.draw();
+            return;
+        }
+        if (this.roi) {
+            this.regions.splice(this.activeRegion, 1);
+            this.selectRegion(Math.min(this.activeRegion, Math.max(0, this.regions.length - 1)));
+        }
     }
 }

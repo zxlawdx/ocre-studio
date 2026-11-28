@@ -1,19 +1,12 @@
-"""
-apps.home.views.__init__
-Registra as rotas do app home.
-"""
+"""Register the standalone Ocre Studio screens."""
 
-from apps.home.views.home import home_view
+from apps.home.views.home import about_view, home_view, recent_view
 
 
 def register_routes(router):
-    router.add(
-        "/home",
-        home_view,
-        name="home",
-        title="Home",
-        icon="🏠",
-        layout="blank",
-        show_in_sidebar=False,
-        order=0,
-    )
+    for name, view, title in (
+        ("home", home_view, "Início"),
+        ("recent", recent_view, "Projetos recentes"),
+        ("about", about_view, "Sobre"),
+    ):
+        router.add(f"/{name}", view, name=name, title=title, layout="blank", show_in_sidebar=False)

@@ -1,0 +1,15 @@
+﻿BEM-VINDO AO OCRE STUDIO
+
+Marinaldo da Costa Barroso Filho desenvolveu o Ocre Studio para explorar
+detalhes em fotografias arqueológicas, preservar os originais e acompanhar
+os filtros usados em cada comparação.
+
+PRIMEIROS PASSOS
+Abra o Editor para experimentar os filtros na imagem de exemplo. Em Ajuda
+você encontra um tutorial, imagens de prática e os atalhos. Em Projetos
+recentes você pode retomar um trabalho salvo.
+
+INSTALAÇÃO ASSISTIDA
+Avance para escolher a pasta de instalação. O aplicativo também pode criar
+um atalho na Área de Trabalho. A tela final oferece a opção de abrir o
+Ocre Studio. No Windows, o editor usa o Microsoft Edge WebView2 Runtime.

@@ -50,6 +50,27 @@ def exercise_menus(window) -> None:
             return exclusive && escaped && count() === 0;
         })()
     """)
+    assert window.evaluate_js("""
+        (() => {
+            const bar = document.querySelector('.menubar');
+            const menus = [...bar.querySelectorAll('summary')];
+            const screens = [...document.querySelectorAll('.workspaces [data-panel]')];
+            for (let round = 0; round < 24; round++) {
+                for (const menu of menus) {
+                    menu.click();
+                    if (bar.querySelectorAll('details[open]').length !== 1) return false;
+                }
+                window.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', cancelable: true}));
+                for (const screen of screens) {
+                    screen.click();
+                    const visible = [...document.querySelectorAll('[data-screen]:not([hidden])')];
+                    if (visible.length !== 1 || visible[0].dataset.screen !== screen.dataset.panel) return false;
+                }
+            }
+            document.querySelector('.workspaces [data-panel=editor]').click();
+            return !bar.querySelector('details[open]');
+        })()
+    """)
 
 
 def exercise_histogram(window, screenshot: Path | None) -> None:
@@ -87,6 +108,56 @@ def exercise_histogram(window, screenshot: Path | None) -> None:
     window.evaluate_js("document.querySelector('.workspace').style.removeProperty('--right')")
 
 
+def exercise_guide(window, screenshot: Path | None) -> None:
+    """Open a credited example through the guide and reproduce its processing."""
+    window.evaluate_js("document.querySelector('.workspaces [data-panel=help]').click()")
+    wait_for(window, "!document.querySelector('[data-screen=help]').hidden")
+    assert window.evaluate_js("""
+        (() => {
+            const registration = document.querySelector('#guide-tab-field');
+            registration.focus();
+            registration.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'ArrowRight', bubbles: true, cancelable: true
+            }));
+            const panel = document.querySelector('#guide-lab');
+            const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+            return document.activeElement.id === 'guide-tab-lab' &&
+                registration.getAttribute('aria-selected') === 'false' &&
+                document.querySelectorAll('.guide [role=tabpanel]:not([hidden])').length === 1 &&
+                !panel.hidden && getComputedStyle(panel).animationName ===
+                    (reduced ? 'none' : 'workspace-content-enter');
+        })()
+    """)
+    wait_for(
+        window,
+        """
+        Array.from(document.querySelectorAll('#guide-lab img')).slice(0, 2)
+            .every(image => image.complete && image.naturalWidth === 1280)
+    """,
+    )
+    if screenshot:
+        sleep(0.3)
+        capture(screenshot.with_name(f"{screenshot.stem}-guia{screenshot.suffix}"))
+    window.evaluate_js("document.querySelector('[data-example=\"serra-da-capivara.jpg\"]').click()")
+    wait_for(
+        window,
+        """
+        document.querySelector('#filename').textContent === 'serra-da-capivara.jpg' &&
+            !document.querySelector('#tool-classic').disabled &&
+            document.querySelector('#status').textContent === 'Pronto'
+    """,
+    )
+    window.evaluate_js("""
+        document.querySelector('#tool-classic').click();
+        document.querySelector('[data-adjust="decorrelation:1"]').click();
+    """)
+    wait_for(
+        window,
+        "document.querySelector('#history li:first-child strong')?.textContent === 'Separar cores'",
+    )
+    window.evaluate_js("document.querySelector('#tool-enhance').click()")
+
+
 def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
     """Exercise folder tabs, ROI, queue, versioned results and project reopen."""
 
@@ -114,11 +185,46 @@ def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
     click('#new-project button[value="confirm"]')
     wait_for(window, "document.querySelector('#project-title').textContent === 'Estudo de teste'")
     snapshot("projetos")
-    click('#gallery [data-photo="Painel 01/painel-claro.png"]')
+    click("#explorer summary")
+    assert window.evaluate_js("""
+        (() => {
+            const summary = document.querySelector('#explorer summary');
+            const [chevron, icon, name] = [...summary.children].map(node =>
+                node.getBoundingClientRect());
+            return summary.parentElement.open && chevron.right < icon.left &&
+                icon.right < name.left && name.right <= summary.getBoundingClientRect().right;
+        })()
+    """)
+    window.evaluate_js("""
+        const photo = document.querySelector('#explorer [data-photo="Painel 01/painel-claro.png"]');
+        photo.focus();
+        photo.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
+    """)
     wait_for(window, "document.querySelector('#filename').textContent === 'painel-claro.png'")
     click('#gallery [data-photo="Painel 01/painel-escuro.png"]')
     wait_for(window, "document.querySelector('#filename').textContent === 'painel-escuro.png'")
     assert window.evaluate_js("document.querySelectorAll('.document-tab').length") == 2
+    assert window.evaluate_js("""
+        (() => {
+            const enhance = document.querySelector('#tool-enhance');
+            enhance.focus();
+            enhance.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'ArrowRight', bubbles: true, cancelable: true
+            }));
+            return document.activeElement.id === 'tool-classic' &&
+                document.querySelector('#enhance-tools').hidden &&
+                document.querySelectorAll('#classic-tools [data-adjust]').length === 15;
+        })()
+    """)
+    if screenshot:
+        sleep(0.2)
+        snapshot("filtros-classicos")
+    click('[data-adjust="equalize:1"]')
+    wait_for(
+        window,
+        "document.querySelector('#history li:first-child')?.textContent.includes('Equalização')",
+    )
+    click("#tool-enhance")
     click('[data-view="roi"]')
     window.evaluate_js("""
         (() => {
@@ -135,6 +241,41 @@ def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
         })()
     """)
     wait_for(window, "document.querySelector('#region-label').textContent.includes('selecionados')")
+    assert window.evaluate_js("""
+        document.querySelector('.viewer .region-toolbar').getBoundingClientRect().height > 0
+    """)
+    click('[data-view="new-roi"]')
+    window.evaluate_js("""
+        (() => {
+            const canvas = document.querySelector('#photograph');
+            const rect = canvas.getBoundingClientRect();
+            const send = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type, {
+                button: 0, pointerId: 1, clientX: rect.left + rect.width * x,
+                clientY: rect.top + rect.height * y
+            }));
+            send('pointerdown', 0.40, 0.35);
+            send('pointermove', 0.49, 0.47);
+            send('pointerup', 0.49, 0.47);
+        })()
+    """)
+    assert window.evaluate_js("document.querySelector('#active-region').options.length === 2")
+    window.evaluate_js("""
+        const region = document.querySelector('#region');
+        region.value = 'all';
+        region.dispatchEvent(new Event('change', {bubbles: true}));
+        document.querySelector('.history-panel').open = true;
+    """)
+    wait_for(window, "Boolean(document.querySelector('.history-panel > .disclosure-enter'))")
+    assert window.evaluate_js("""
+        getComputedStyle(document.querySelector('.history-panel > .disclosure-content')).animationName ===
+            (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'none' : 'disclosure-expand')
+    """)
+    click("#tool-classic")
+    click('[data-adjust="equalize:1"]')
+    wait_for(
+        window, "document.querySelector('#history li:first-child span').textContent.includes(' · ')"
+    )
+    click("#tool-enhance")
     snapshot("roi")
     click(".apply-button")
     wait_for(window, "document.querySelector('#result-list [data-result]') !== null", timeout=45)
@@ -144,14 +285,37 @@ def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
     window.evaluate_js("""
         document.querySelector('#batch-form select[name=scope]').value = 'all';
         document.querySelector('#batch-methods input[value=estrutural]').checked = true;
+        document.querySelector('.batch-classic').open = true;
+        document.querySelector('#batch-classic-methods input[value=classic_equalize_1]').click();
     """)
     assert window.evaluate_js("""
         [...document.querySelectorAll('#batch-methods .choice-input')].every(input =>
             input.getBoundingClientRect().right < input.nextElementSibling.getBoundingClientRect().left)
     """)
-    click("#start-batch")
-    wait_for(window, "document.querySelector('#queue-progress').value === 6", timeout=70)
-    assert window.evaluate_js("document.querySelectorAll('#queue [data-batch=open]').length") == 6
+    window.evaluate_js("""
+        (() => {
+            const api = window.pywebview.api;
+            const submit = api.ocre_batch;
+            window.ocreQaBatchSubmissions = 0;
+            api.ocre_batch = (...args) => {
+                window.ocreQaBatchSubmissions++;
+                return submit(...args);
+            };
+            const form = document.querySelector('#batch-form');
+            document.querySelector('#start-batch').click();
+            for (let index = 0; index < 24; index++) {
+                form.dispatchEvent(new Event('submit', {bubbles: true, cancelable: true}));
+            }
+        })()
+    """)
+    wait_for(window, "document.querySelector('#queue-progress').value === 9", timeout=70)
+    assert window.evaluate_js("window.ocreQaBatchSubmissions === 1")
+    assert window.evaluate_js("document.querySelectorAll('#queue [data-batch=open]').length") == 9
+    assert window.evaluate_js("""
+        [...document.querySelectorAll('#queue tr')].filter(row =>
+            row.cells[1].textContent === 'Equalizar histograma' &&
+            row.querySelector('[data-batch=open]')).length === 3
+    """)
     click('[data-action="batch-export"]')
     assert window.evaluate_js("""
         [...document.querySelectorAll('#export-results .choice-input')].every(input =>
@@ -168,13 +332,18 @@ def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
     assert saved.is_file()
     click('.menubar [data-action="close-project"]')
     wait_for(window, "document.querySelector('#project-heading').textContent === 'Sem projeto'")
-    click('.menubar [data-action="open-project"]')
-    wait_for(window, "document.querySelector('#project-heading').textContent === 'Estudo de teste'")
+    click('.workspaces [data-panel="projects"]')
+    click('[data-screen="projects"] a[href="/recent"]')
+    wait_for(window, "Boolean(document.querySelector('#home-projects [data-recent]'))")
+    click("#home-projects [data-recent]")
+    wait_for(
+        window, "document.querySelector('#project-heading')?.textContent === 'Estudo de teste'"
+    )
     click('#gallery [data-photo="Painel 01/painel-escuro.png"]')
     wait_for(
         window,
         "document.querySelector('#result-list [data-result]') !== null && "
-        "document.querySelector('#region-label').textContent.includes('selecionados')",
+        "document.querySelector('#active-region').options.length === 2",
     )
     if screenshot:
         capture(screenshot)
@@ -221,10 +390,22 @@ def main() -> None:
                 )
                 app.bridge._folder = lambda: source.parent
                 wait_for(window, "Boolean(document.querySelector('.studio-home, #ocre-editor'))")
-                window.evaluate_js("document.querySelector('.studio-home a')?.click()")
-                wait_for(window, "Boolean(document.getElementById('ocre-editor'))")
+                if options.screenshot and window.evaluate_js(
+                    "Boolean(document.querySelector('.studio-home'))"
+                ):
+                    sleep(0.2)
+                    capture(options.screenshot.with_name(f"{options.screenshot.stem}-inicio.png"))
+                window.evaluate_js(
+                    "document.querySelector('.studio-home .home-actions a[href=\"/editor\"]')?.click()"
+                )
+                wait_for(
+                    window,
+                    "document.getElementById('filename')?.textContent === 'amostra-inicial.png' && "
+                    "document.getElementById('placeholder').hidden",
+                )
                 sleep(0.4)
                 exercise_menus(window)
+                exercise_guide(window, options.screenshot)
                 window.evaluate_js("document.querySelector('[data-action=open]').click()")
                 wait_for(
                     window,
@@ -236,7 +417,8 @@ def main() -> None:
                 )
                 wait_for(
                     window,
-                    "document.querySelector('#history li:last-child')?.textContent.includes('Brilho · 1,3')",
+                    "document.querySelector('#history li:first-child strong')?.textContent === 'Brilho' && "
+                    "document.querySelector('#history li:first-child span')?.textContent === '1,3'",
                 )
                 if options.native:
                     window.evaluate_js(

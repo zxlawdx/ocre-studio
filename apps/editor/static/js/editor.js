@@ -1,7 +1,10 @@
 import { BatchView } from "./batch.js";
 import { CatalogView } from "./catalog.js";
+import { mountDisclosures } from "./disclosures.js";
+import { describeArea, filterName, renderHistory } from "./history.js";
 import { mountMenubar } from "./menubar.js";
-import { adjustments, element, intensity, neural, techniqueName, techniques } from "./techniques.js";
+import { adjustments, classicFilters, element, intensity, neural, techniqueName, techniques } from "./techniques.js";
+import { mountTabs } from "./tabs.js";
 import { Viewport } from "./viewport.js";
 
 function drawHistogram(canvas, channels, visible) {
@@ -117,10 +120,23 @@ export async function mount(root, signal) {
 
     function updateRegion() {
         const roi = viewport.roi;
+        const regions = viewport.regions;
         const mode = find("#region").value;
-        const label = mode === "auto" ? "sugestão automática" : mode === "saved" ? "região de referência" :
-            roi && mode === "selection" ? `${roi[2] - roi[0]} × ${roi[3] - roi[1]} px selecionados` : "imagem inteira";
+        const label = mode === "all" && regions.length ? `${regions.length} regiões` :
+            mode === "selection" && roi ? `R${viewport.activeRegion + 1} · ${roi[2] - roi[0]} × ${roi[3] - roi[1]} px selecionados` :
+                describeArea({ auto: "auto", saved: "saved" }[mode]);
         find("#region-label").textContent = `Área · ${label}`;
+        const selector = find("#active-region");
+        const options = regions.map((box, index) =>
+            new Option(`R${index + 1} · ${box[2] - box[0]} × ${box[3] - box[1]} px`, index));
+        selector.replaceChildren(...(options.length ? options : [new Option("Nenhuma", "")]));
+        if (options.length) selector.value = String(viewport.activeRegion);
+        selector.disabled = !options.length || busy;
+        find('[data-view="clear-roi"]').disabled = !roi || busy;
+    }
+
+    function selectedRegions() {
+        return { selection: viewport.roi ? [viewport.roi] : [], all: viewport.regions }[find("#region").value] ?? [];
     }
 
     function viewState() {
@@ -133,11 +149,12 @@ export async function mount(root, signal) {
     }
 
     async function saveView() {
-        if (loaded && catalog.photo) await api.ocre_view(catalog.photo, viewport.roi, viewState());
+        if (loaded) await api.ocre_view(catalog.photo, viewport.regions, viewport.activeRegion, viewState());
     }
 
+    viewport.onRegionLimit = () => report("Use até 16 regiões por fotografia.");
     viewport.onRegion = () => {
-        find("#region").value = "selection";
+        if (find("#region").value !== "all") find("#region").value = "selection";
         updateRegion();
         if (catalog.catalog) catalog.catalog.dirty = true;
         controls();
@@ -146,6 +163,7 @@ export async function mount(root, signal) {
 
     function panel(name) {
         activePanel = name;
+        root.dataset.workspace = name;
         root.querySelectorAll("[data-screen]").forEach((node) => { node.hidden = node.dataset.screen !== name; });
         root.querySelectorAll(".workspaces [data-panel]").forEach((node) => {
             if (node.dataset.panel === name) node.setAttribute("aria-current", "page");
@@ -157,6 +175,7 @@ export async function mount(root, signal) {
 
     function controls() {
         root.querySelectorAll("[data-document]").forEach((node) => { node.disabled = !loaded || busy; });
+        find(".viewport").setAttribute("aria-busy", String(busy || processing.has(catalog.photo)));
         find("#device").disabled = !neural.has(method()) || busy;
         find("#strength").disabled = !intensity.has(method()) || busy;
         find("#strength-value").textContent = `${Math.round(strength() * 100)}%`;
@@ -181,7 +200,8 @@ export async function mount(root, signal) {
         documentState = null;
         loaded = false;
         viewport.images = [];
-        viewport.roi = null;
+        viewport.regions = [];
+        viewport.activeRegion = 0;
         viewport.draw();
         find("#placeholder").hidden = false;
         find("#comparison-bar").hidden = true;
@@ -215,22 +235,7 @@ export async function mount(root, signal) {
         drawHistogram(find("#histogram"), documentState?.histogram ?? [], selected);
     }
 
-    function presentRecent(entries) {
-        const target = find("#recent-projects");
-        target.replaceChildren(...entries.map((item) => {
-            const row = element("div", "", { class: "recent-project" });
-            const button = element("button", item.name, { "data-recent": item.path, title: item.path });
-            button.disabled = item.missing;
-            row.append(button, element("button", "Remover da lista", { "data-recent-remove": item.path }),
-                element("small", [item.root, `${item.photos} fotografias`, item.missing ?
-                    "Arquivo ausente" : new Date(item.accessed).toLocaleDateString("pt-BR")].join(" · ")));
-            return row;
-        }));
-        if (!entries.length) target.append(element("p", "Nenhum projeto recente.", { class: "muted" }));
-    }
-
     async function present(value) {
-        if (value.recent) presentRecent(value.recent);
         if (typeof value.native_available === "boolean") {
             nativeAvailable = value.native_available;
             find("#model-state").textContent = nativeAvailable ? "Modelos disponíveis" : "Recursos de realce cromático ausentes.";
@@ -243,6 +248,7 @@ export async function mount(root, signal) {
         }
         if (value.queue) batch.render(value.queue);
         if (value.clear) clearDocument();
+        if (value.screen) panel(value.screen);
         if (value.comparison) {
             if (value.comparison_size[0] !== documentState.width || value.comparison_size[1] !== documentState.height) {
                 throw new Error("Os resultados têm resoluções diferentes. Abra cada resultado separadamente.");
@@ -286,16 +292,7 @@ export async function mount(root, signal) {
         }));
         find("#maps").value = doc.map;
         presentResults(results);
-        const initial = element("li", "Fotografia importada");
-        const history = doc.history.map((step, index) => {
-            const item = element("li");
-            item.append(element("button", `${adjustments[step.name]?.[0] ?? "Ajuste"} · ${step.value.toLocaleString("pt-BR")}`, {
-                "data-history": index + 1, title: "Voltar a este estado"
-            }));
-            return item;
-        });
-        if (doc.provenance.preset) history.unshift(element("li", `${techniqueName(doc.provenance.preset)} aplicado`));
-        find("#history").replaceChildren(initial, ...history);
+        renderHistory(find("#history"), doc);
         for (const key of Object.keys(adjustments).slice(0, 5)) {
             const current = [...doc.history].reverse().find((step) => step.name === key);
             const range = find(`#adjust-${key}`);
@@ -310,14 +307,20 @@ export async function mount(root, signal) {
             find("#comparison-bar").hidden = true;
         }
         await viewport.load(doc, signal);
+        if (doc.original && !signal.aborted) {
+            const canvas = find("#photograph");
+            canvas.classList.remove("photo-enter");
+            void canvas.offsetWidth;
+            canvas.classList.add("photo-enter");
+        }
     }
 
-    async function command(callback) {
+    async function command(callback, message = "Em andamento…") {
         if (busy) return;
         busy = true;
         const sent = ++revision;
         controls();
-        report("Em andamento…");
+        report(message);
         try {
             if (await callback()) return;
             if (sent === revision) report("Pronto");
@@ -372,14 +375,18 @@ export async function mount(root, signal) {
         if (action === "out") viewport.changeZoom(1 / 1.2);
         if (action === "in") viewport.changeZoom(1.2);
         if (action === "clear-roi") viewport.cancel();
-        if (["roi", "pan"].includes(action)) viewport.mode = action;
-        if (action === "roi" && viewport.comparison === "side") viewport.comparison = "wipe";
+        if (action === "new-roi") {
+            viewport.addRegion = true;
+            report("Arraste sobre a imagem para desenhar uma região.");
+        } else if (action === "pan" || action === "clear-roi") viewport.addRegion = false;
+        if (["roi", "new-roi", "pan"].includes(action)) viewport.mode = action === "new-roi" ? "roi" : action;
+        if (viewport.mode === "roi" && viewport.comparison === "side") viewport.comparison = "wipe";
         viewport.draw();
         controlView();
     }
 
     const sync = (callback) => { void command(callback); };
-    const edit = (operation, value) => sync(() => api.ocre_edit(operation, value));
+    const edit = (operation, value) => sync(() => api.ocre_edit(operation, value, null));
     function canLeave() {
         return !catalog.catalog?.dirty || window.confirm("O projeto contém alterações não salvas. Continuar?");
     }
@@ -390,7 +397,7 @@ export async function mount(root, signal) {
         if (!name || (remove && !window.confirm(`Remover o preset ${name}?`))) return false;
         const summary = await api.ocre_preset(name, remove ? null : {
             technique: method(), strength: strength(), region: find("#region").value,
-            adjustments: docAdjustments()
+            adjustments: docAdjustments().filter((step) => !step.regions?.length)
         });
         await present({ catalog: summary });
         return false;
@@ -406,10 +413,14 @@ export async function mount(root, signal) {
         open: () => { panel("editor"); return command(() => api.ocre_open()); },
         folder: () => { if (canLeave()) sync(() => api.ocre_folder(true)); },
         new: () => { if (canLeave()) { find("#new-project").returnValue = ""; find("#new-project").showModal(); } },
-        help: () => find("#help").showModal(),
+        help: () => panel("help"),
+        "practice-project": () => {
+            if (canLeave()) sync(() => api.ocre_practice_project());
+        },
         infer: () => {
             const mode = find("#region").value;
-            const region = { selection: viewport.roi, full: null, saved: "saved", auto: "auto" }[mode];
+            const regions = selectedRegions();
+            const region = { saved: "saved", auto: "auto" }[mode] ?? (regions.length ? regions : null);
             const run = () => api.ocre_infer(method(), strength(), region, find("#device").value);
             const photo = catalog.photo;
             if (!photo) { sync(run); return; }
@@ -463,6 +474,11 @@ export async function mount(root, signal) {
         "toggle-gallery": () => root.classList.toggle("hide-gallery")
     };
 
+    mountDisclosures(root, signal);
+    mountTabs(root, find(".tool-tabs"), signal);
+    mountTabs(root, find(".guide-nav"), signal, () => {
+        find(".help-page").scrollTop = 0;
+    });
     initializeTools(find, (operation, value) => edit(`set:${operation}`, value), signal);
     initializeResize(root, signal);
     mountMenubar(find(".menubar"), signal);
@@ -474,6 +490,10 @@ export async function mount(root, signal) {
         if (trigger.dataset.recent && canLeave()) sync(() => api.ocre_open_recent(trigger.dataset.recent));
         if (trigger.dataset.recentRemove) sync(() => api.ocre_open_recent(trigger.dataset.recentRemove, true));
         if (screen) panel(screen);
+        if (trigger.dataset.example && !busy) {
+            panel("editor");
+            void command(() => api.ocre_open_example(trigger.dataset.example), "Abrindo fotografia do exercício…");
+        }
         if (tool) view(tool);
         if (comparison) {
             viewport.comparison = comparison;
@@ -487,7 +507,17 @@ export async function mount(root, signal) {
         }
         if (adjust) {
             const [operation, amount] = adjust.split(":");
-            edit(operation, Number(amount));
+            const mode = find("#region").value;
+            if (["auto", "saved"].includes(mode)) {
+                report("Para este filtro, escolha uma região desenhada ou a imagem inteira.");
+                return;
+            }
+            const areas = selectedRegions();
+            const previous = documentState.history.at(-1);
+            const input = previous ? filterName(previous.name, previous.value) :
+                techniqueName(documentState.map === "original" ? "original" : documentState.provenance.preset);
+            void command(() => api.ocre_edit(operation, Number(amount), areas),
+                `Aplicando ${filterName(operation, Number(amount))} · entrada: ${input}…`);
         }
         if (history) edit("history", Number(history));
         if (tab !== undefined) openPhoto(tab);
@@ -519,7 +549,7 @@ export async function mount(root, signal) {
             favorite: data.has("favorite"), metadata: data.has("metadata")
         }));
     }, { signal });
-    for (const [key] of Object.entries(techniques)) {
+    for (const [key] of Object.entries({ ...techniques, ...classicFilters })) {
         find('#export-results select[name="technique"]').append(new Option(techniqueName(key), key));
     }
     find("#presets").addEventListener("change", (event) => {
@@ -541,6 +571,12 @@ export async function mount(root, signal) {
         } catch (error) {
             report(error.message);
         }
+    }, { signal });
+    find("#active-region").addEventListener("change", (event) =>
+        viewport.selectRegion(Number(event.target.value)), { signal });
+    find("#region").addEventListener("change", () => {
+        updateRegion();
+        void saveView().catch((error) => report(error.message));
     }, { signal });
     find("#histogram-channels").addEventListener("change", plots, { signal });
     find("#comparison").addEventListener("input", (event) => {
@@ -605,11 +641,12 @@ export async function mount(root, signal) {
 
     controls();
     try {
-        const [state, queue, recent] = await Promise.all([api.ocre_state(), api.ocre_batch_state(), api.ocre_recent()]);
+        const [state, queue] = await Promise.all([api.ocre_state(), api.ocre_batch_state()]);
         if (signal.aborted) return;
         busy = Boolean(state.busy);
-        await present({ ...state, recent });
+        await present(state);
         batch.render(queue);
+        if (state.catalog && !state.document) panel("projects");
     } catch {
         report("Falha ao recuperar o estado do editor.");
     }

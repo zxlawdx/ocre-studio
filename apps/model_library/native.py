@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
+
+from vela.database import app_data_dir
 
 from apps.model_library.service import MAX_ENTRY, V7_FILES, V8_FILES, KokentauModel
 
@@ -28,9 +31,14 @@ class NativeModelRegistry:
     def __init__(self, directory: Path | None = None) -> None:
         root = project_root()
         if directory is None:
-            bundle = root / "assets/native-models/kokentau"
-            local = root / "native-resources/kokentau"
-            directory = bundle if bundle.is_dir() or getattr(sys, "frozen", False) else local
+            if configured := os.environ.get("OCRE_MODEL_DIR"):
+                directory = Path(configured).expanduser()
+            elif getattr(sys, "frozen", False):
+                directory = app_data_dir("Ocre-Studio") / "models/kokentau"
+            else:
+                local = root / "native-resources/kokentau"
+                legacy = root / "assets/native-models/kokentau"
+                directory = legacy if legacy.is_dir() else local
         self.directory = directory
         self._model: KokentauModel | None = None
         self._requested: str | None = None

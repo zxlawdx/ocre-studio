@@ -42,7 +42,8 @@ jobs:
           set -euo pipefail
           gh release download "$KOKENTAU_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'kokentau-*.zip' --dir "$RUNNER_TEMP/kokentau"
           python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json
-          python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target assets/native-models/kokentau
+          python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target "$RUNNER_TEMP/kokentau-runtime"
+          echo "OCRE_MODEL_DIR=$RUNNER_TEMP/kokentau-runtime" >> "$GITHUB_ENV"
       - run: |
           ruff check apps config tests tools manage.py
           ruff format --check apps config tests tools manage.py
@@ -107,7 +108,8 @@ jobs:
           set -euo pipefail
           gh release download "$KOKENTAU_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'kokentau-*.zip' --dir "$RUNNER_TEMP/kokentau"
           python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json
-          python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target assets/native-models/kokentau
+          python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target "$RUNNER_TEMP/kokentau-runtime"
+          echo "OCRE_MODEL_DIR=$RUNNER_TEMP/kokentau-runtime" >> "$GITHUB_ENV"
       - name: Expose GTK bindings after installing pinned Python dependencies
         if: runner.os == 'Linux'
         run: |
@@ -126,7 +128,25 @@ jobs:
           python manage.py buildapp --gui "${{ matrix.gui }}" --icon "${{ matrix.icon }}" --installer --dry-run
       - name: Build and validate native bundle
         shell: bash
-        run: python manage.py buildapp --gui "${{ matrix.gui }}" --icon "${{ matrix.icon }}" --installer --plugins --yes
+        run: |
+          args=(--gui "${{ matrix.gui }}" --icon "${{ matrix.icon }}" --plugins --yes)
+          if [[ "$RUNNER_OS" == Linux ]]; then args+=(--installer); fi
+          python manage.py buildapp "${args[@]}"
+      - name: Compile and exercise the Windows setup wizard
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m tools.package_windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installers = @(Get-ChildItem dist -Filter '*-Setup.exe')
+          if ($installers.Count -ne 1) { throw 'Instalador Windows ausente ou ambíguo.' }
+          $setup = $installers[0]
+          $target = Join-Path $env:RUNNER_TEMP 'Ocre-Wizard-Smoke'
+          $result = Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=desktopicon', ('/DIR="' + $target + '"') -Wait -PassThru
+          if ($result.ExitCode -ne 0) { exit $result.ExitCode }
+          if (!(Test-Path (Join-Path $target 'assets/legal/TERMOS-DE-USO.txt'))) { throw 'Termos ausentes na instalação.' }
+          $app = Start-Process (Join-Path $target 'Ocre-Studio.exe') -ArgumentList '--self-test' -Wait -PassThru
+          if ($app.ExitCode -ne 0) { exit $app.ExitCode }
       - name: Exercise GTK WebView on Linux
         if: runner.os == 'Linux'
         env:

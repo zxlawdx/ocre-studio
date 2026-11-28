@@ -13,7 +13,7 @@ class ProjectRepository:
     """Store reproducible edits while leaving source files in place."""
 
     @staticmethod
-    def save(path: Path, document: ImageDocument) -> None:
+    def save(path: Path, document: ImageDocument, selection: dict | None = None) -> None:
         """Publish a complete versioned project in one atomic replacement."""
         try:
             source = os.path.relpath(document.source, path.parent)
@@ -28,6 +28,8 @@ class ProjectRepository:
             "map": document.selected_map,
             "neural": document.provenance,
         }
+        if selection is not None:
+            payload["selection"] = selection
         with NamedTemporaryFile(
             mode="w", encoding="utf-8", dir=path.parent, delete=False
         ) as stream:

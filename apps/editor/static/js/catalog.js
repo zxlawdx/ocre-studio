@@ -3,6 +3,18 @@ import { element } from "./techniques.js";
 const basename = (path) => path.split("/").at(-1);
 const PAGE = 160;
 
+function icon(sprite, name, className = "") {
+    const namespace = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(namespace, "svg");
+    svg.setAttribute("class", `ui-icon ${className}`);
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const use = document.createElementNS(namespace, "use");
+    use.setAttribute("href", `${sprite}#${name}`);
+    svg.append(use);
+    return svg;
+}
+
 export class CatalogView {
     constructor(root, api, signal, open) {
         this.root = root;
@@ -122,6 +134,8 @@ export class CatalogView {
         this.explorer.replaceChildren();
         this.gallery.replaceChildren();
         const photos = this.matching();
+        const searching = this.search.value.trim() !== "";
+        const sprite = this.root.dataset.icons;
         const folders = new Map([["", this.explorer]]);
         for (const key of photos.slice(0, this.limit)) {
             let directory = "";
@@ -131,12 +145,15 @@ export class CatalogView {
                 if (!folders.has(directory)) {
                     const details = element("details");
                     const folderKey = directory;
-                    details.open = this.expanded.has(folderKey) || this.search.value !== "";
-                    details.addEventListener("toggle", () => {
+                    details.open = this.expanded.has(folderKey) || searching;
+                    if (!searching) details.addEventListener("toggle", () => {
                         if (details.open) this.expanded.add(folderKey);
                         else this.expanded.delete(folderKey);
                     });
-                    details.append(element("summary", part));
+                    const summary = element("summary", "", { title: folderKey });
+                    summary.append(icon(sprite, "chevron", "folder-chevron"), icon(sprite, "folder"),
+                        element("span", part, { class: "catalog-name" }));
+                    details.append(summary);
                     folders.get(parent).append(details);
                     folders.set(folderKey, details);
                 }
@@ -144,8 +161,8 @@ export class CatalogView {
             const row = element("button", "", {
                 "data-photo": key, class: "photo-row", type: "button", title: key
             });
-            row.append(element("span", "□", { "aria-hidden": "true", class: "photo-check" }),
-                element("span", basename(key)));
+            row.append(icon(sprite, "image", "photo-icon"), icon(sprite, "check", "photo-check"),
+                element("span", basename(key), { class: "catalog-name" }));
             folders.get(directory).append(row);
             const frame = element("button", "", { "data-photo": key, type: "button", title: key });
             const image = element("img", "", { "data-thumbnail": key, alt: "" });
@@ -169,8 +186,6 @@ export class CatalogView {
             item.setAttribute("aria-pressed", String(this.selected.has(key)));
             if (key === this.photo) item.setAttribute("aria-current", "true");
             else item.removeAttribute("aria-current");
-            const check = item.querySelector(".photo-check");
-            if (check) check.textContent = this.selected.has(key) ? "✓" : "□";
             const status = this.statuses.get(key);
             const name = basename(key);
             item.setAttribute("aria-label", status ? `${name}, ${status}` : name);
@@ -189,14 +204,18 @@ export class CatalogView {
 
     renderTabs() {
         const container = this.root.querySelector("#tabs");
+        const previous = new Set([...container.querySelectorAll("[data-tab]")].map((item) => item.dataset.tab));
         container.replaceChildren();
         for (const key of this.tabs) {
-            const tab = element("div", "", { class: "document-tab" });
-            if (key === this.photo) tab.setAttribute("aria-current", "true");
-            tab.append(
-                element("button", basename(key), { "data-tab": key, class: "tab-name", title: key }),
-                element("button", "×", { "data-close-tab": key, "aria-label": `Fechar ${basename(key)}` })
-            );
+            const tab = element("div", "", { class: previous.has(key) ? "document-tab" : "document-tab tab-enter" });
+            const name = element("button", "", { "data-tab": key, class: "tab-name", title: key });
+            if (key === this.photo) name.setAttribute("aria-current", "true");
+            name.append(icon(this.root.dataset.icons, "image"),
+                element("span", basename(key), { class: "catalog-name" }));
+            const label = `Fechar ${basename(key)}`;
+            const close = element("button", "", { "data-close-tab": key, "aria-label": label, title: label });
+            close.append(icon(this.root.dataset.icons, "close"));
+            tab.append(name, close);
             container.append(tab);
         }
     }

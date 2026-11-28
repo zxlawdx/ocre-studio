@@ -10,3 +10,14 @@ def exclude_unused_qt(plan: dict) -> None:
     command = plan["command"]
     for module in QT_BINDINGS:
         command[-1:-1] = ["--exclude-module", module]
+
+
+def keep_model_payloads_external(plan: dict) -> None:
+    """Copy application assets explicitly while leaving model checkpoints outside."""
+    if "assets" in plan["folders"]:
+        plan["folders"].remove("assets")
+        plan["folders"].extend(
+            f"assets/{folder}"
+            for folder in ("icons", "legal", "dependency-notices")
+            if (plan["root"] / "assets" / folder).is_dir()
+        )

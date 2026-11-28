@@ -65,33 +65,28 @@ export function regionTarget(point, rectangle) {
     return x > left && x < right && y > top && y < bottom ? "move" : null;
 }
 
-export function drawRegion(context, region, bounds, dimensions) {
+export function drawRegion(context, region, bounds, dimensions, number, active) {
     const rectangle = canvasRegion(region, bounds, dimensions);
     const [left, top, right, bottom] = rectangle;
     const width = right - left;
     const height = bottom - top;
     context.save();
-    context.fillStyle = "rgba(8, 9, 10, .44)";
-    context.beginPath();
-    context.rect(...bounds);
-    context.rect(left, top, width, height);
-    context.fill("evenodd");
     context.strokeStyle = "#121316";
     context.lineWidth = 5;
     context.strokeRect(left, top, width, height);
-    context.strokeStyle = "#ffffff";
+    context.strokeStyle = active ? "#fff" : "#d4a77e";
     context.lineWidth = 2;
     context.setLineDash([7, 4]);
     context.strokeRect(left, top, width, height);
     context.setLineDash([]);
     context.lineWidth = 2;
-    for (const [x, y] of points(rectangle)) {
+    for (const [x, y] of active ? points(rectangle) : []) {
         context.fillStyle = "#fff";
         context.strokeStyle = "#16181b";
         context.fillRect(x - 5, y - 5, 10, 10);
         context.strokeRect(x - 5, y - 5, 10, 10);
     }
-    const label = `${region[2] - region[0]} × ${region[3] - region[1]} px`;
+    const label = active ? `R${number} · ${region[2] - region[0]} × ${region[3] - region[1]} px` : `R${number}`;
     context.font = "12px system-ui";
     const labelY = top >= 27 ? top - 25 : top + 8;
     context.fillStyle = "#18191c";

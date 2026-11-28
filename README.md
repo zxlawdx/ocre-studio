@@ -12,3 +12,7 @@ Autor do Ocre Studio e dos modelos Kokentau: Marinaldo da Costa Barroso Filho ([
 - [CLI nativo do Vela](docs/VELA_CLI.md)
 - [Modelos e metodologia](docs/KOKENTAU_V8_2.md)
 - [Build, backends e avisos de licença](docs/BUILD.md)
+
+## Licença de uso
+
+O Ocre Studio é distribuído conforme os [termos de uso do aplicativo](assets/legal/TERMOS-DE-USO.txt). Os componentes e materiais de terceiros mantêm suas próprias licenças.
