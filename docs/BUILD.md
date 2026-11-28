@@ -1,6 +1,6 @@
 # Build e dependências de distribuição
 
-O Vela 0.2.2 está fixado em `b02be516871e507a2f678146cb5b8a822221883d`. A saída do `makeworkflow` serviu de base para a matriz atual. O build mantém o launcher oficial do Vela. A aplicação embarca Python e o PyTorch CPU. CUDA depende de uma instalação compatível do PyTorch para execução a partir do código-fonte.
+O Vela 0.2.2 está fixado em `ba25ac67671c8b7940ee838556e5d3b9948491ec`. A saída do `makeworkflow` serviu de base para a matriz atual. O build mantém o launcher oficial do Vela. A aplicação embarca Python e o PyTorch CPU. CUDA depende de uma instalação compatível do PyTorch para execução a partir do código-fonte.
 
 | Perfil | Evidência e restrições |
 | --- | --- |

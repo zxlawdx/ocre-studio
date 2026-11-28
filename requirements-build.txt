@@ -1,2 +1,2 @@
-vela-framework[build] @ git+https://github.com/zxlawdx/Vela-framework.git@b02be516871e507a2f678146cb5b8a822221883d
+vela-framework[build] @ git+https://github.com/zxlawdx/Vela-framework.git@ba25ac67671c8b7940ee838556e5d3b9948491ec
 PyInstaller==6.22.3

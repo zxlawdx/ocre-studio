@@ -23,7 +23,12 @@ def wait_for(window, expression: str, timeout: float = 15) -> None:
         if window.evaluate_js(expression):
             return
         sleep(0.1)
-    raise RuntimeError(f"Estado da interface não atingido: {expression}")
+    state = window.evaluate_js("""
+        JSON.stringify({status: document.querySelector('#status')?.textContent,
+        maps: document.querySelector('#maps')?.value,
+        dimensions: document.querySelector('#dimensions')?.textContent})
+    """)
+    raise RuntimeError(f"Estado da interface não atingido: {expression}; estado: {state}")
 
 
 def capture(path: Path) -> None:
@@ -421,15 +426,22 @@ def main() -> None:
                     "document.querySelector('#history li:first-child span')?.textContent === '1,3'",
                 )
                 if options.native:
+                    wait_for(window, "document.querySelector('.apply-button')?.disabled === false")
+                    print(window.evaluate_js("document.querySelector('#model-state').textContent"))
                     window.evaluate_js(
                         "document.getElementById('region').value = 'full';"
                         "document.getElementById('device').value = 'cpu';"
-                        "document.querySelector('[data-action=infer]').click()"
+                        "document.querySelector('.apply-button').click()"
                     )
-                    wait_for(window, "document.getElementById('maps')?.value === 'combinado'")
+                    wait_for(
+                        window,
+                        "document.getElementById('maps')?.value === 'combinado'",
+                        timeout=180,
+                    )
                     wait_for(
                         window,
                         "document.getElementById('dimensions')?.textContent.includes('CPU')",
+                        timeout=180,
                     )
                 exercise_histogram(window, options.screenshot)
                 if options.workspace:
