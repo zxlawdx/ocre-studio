@@ -329,3 +329,13 @@
     from { opacity: .3; transform: translateY(-4px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+.workspace .result-provenance {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 5px 12px;
+    margin-block: 10px;
+}
+.workspace .result-provenance dt { color: var(--muted); }
+.workspace .result-provenance dd { margin: 0; overflow-wrap: anywhere; }
+.workspace .result-provenance[hidden] { display: none; }

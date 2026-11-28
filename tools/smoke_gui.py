@@ -285,6 +285,14 @@ def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
     click(".apply-button")
     wait_for(window, "document.querySelector('#result-list [data-result]') !== null", timeout=45)
     wait_for(window, "document.querySelector('#status').textContent === 'Pronto'")
+    assert window.evaluate_js("""
+        (() => {
+            const provenance = document.querySelector('dl#provenance');
+            const labels = [...provenance.querySelectorAll('dt')].map(item => item.textContent);
+            return !provenance.hidden && labels.includes('Técnica') &&
+                labels.includes('Área') && labels.includes('Duração');
+        })()
+    """)
     snapshot("realce")
     click('.workspaces [data-panel="batch"]')
     window.evaluate_js("""

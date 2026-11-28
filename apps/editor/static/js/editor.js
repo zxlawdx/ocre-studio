@@ -211,7 +211,7 @@ export async function mount(root, signal) {
         find("#history").replaceChildren();
         find("#result-list").replaceChildren();
         find("#maps").replaceChildren(new Option("Original", "original"));
-        find("#provenance").textContent = "";
+        showProvenance(null);
         drawHistogram(find("#histogram"), [], new Set());
     }
 
@@ -233,6 +233,28 @@ export async function mount(root, signal) {
     function plots() {
         const selected = new Set([...root.querySelectorAll("#histogram-channels input:checked")].map((input) => Number(input.value)));
         drawHistogram(find("#histogram"), documentState?.histogram ?? [], selected);
+    }
+
+    function showProvenance(provenance) {
+        const list = find("#provenance");
+        list.replaceChildren();
+        if (!provenance?.preset) {
+            list.hidden = true;
+            return;
+        }
+        const { preset, roi, device, seconds } = provenance;
+        const entries = [
+            ["Técnica", techniqueName(preset)],
+            ["Área", describeArea(roi)],
+            ["Dispositivo", device?.toUpperCase()],
+            ["Duração", Number.isFinite(seconds) ? `${seconds.toLocaleString("pt-BR", {
+                maximumFractionDigits: 2
+            })} s` : null]
+        ];
+        for (const [name, value] of entries) {
+            if (value) list.append(element("dt", name), element("dd", value));
+        }
+        list.hidden = false;
     }
 
     async function present(value) {
@@ -272,7 +294,7 @@ export async function mount(root, signal) {
         const { seconds, device } = doc.provenance;
         find("#dimensions").textContent = [`${doc.width} × ${doc.height} px`, device?.toUpperCase(),
             seconds === undefined ? "" : `${seconds.toFixed(2)} s`].filter(Boolean).join(" · ");
-        find("#provenance").textContent = Object.keys(doc.provenance).length ? JSON.stringify(doc.provenance, null, 2) : "";
+        showProvenance(doc.map === "original" ? null : doc.provenance);
         if (doc.original) {
             find("#before-label").textContent = "Original";
             const stored = doc.view ?? {};
