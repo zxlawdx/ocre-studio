@@ -259,15 +259,69 @@ Extração de detalhes locais de luminância por meio da diferença entre a imag
 
 <ul>
   <li><strong>Windows:</strong> Instalador <code>Setup.exe</code> ou pacote portátil <code>.zip</code> (requer <em>Microsoft Edge WebView2 Runtime</em>).</li>
-  <li><strong>Linux:</strong> Pacotes <code>.deb</code> (Ubuntu/Debian/Mint), <code>.rpm</code> (Fedora), <code>AppImage</code> ou <code>.zip</code> portátil.</li>
+  <li><strong>Linux:</strong> Pacotes <code>.deb</code> (Linux Mint, Zorin OS, Ubuntu e Debian), <code>.rpm</code> (Fedora), instalador <code>.run</code>, AppImage ou ZIP portátil.</li>
 </ul>
 
-<pre><code class="language-bash"># Exemplo de instalação via pacote DEB
-sudo apt install ./ocre-studio_*.deb
+#### Linux Mint, Zorin OS e Fedora pelo terminal
 
-# Exemplo de execução via AppImage
-chmod +x Ocre-Studio-*.AppImage
-./Ocre-Studio-*.AppImage</code></pre>
+Os comandos abaixo são para Linux x86-64. Eles baixam o pacote da versão mais recente publicada do Ocre Studio, incluindo pré-lançamentos, e conferem o SHA-256 antes de instalar. Rode os blocos no mesmo terminal Bash.
+
+Instale as ferramentas de download da sua distribuição.
+
+```bash
+# Linux Mint ou Zorin OS
+sudo apt update && sudo apt install curl jq
+```
+
+```bash
+# Fedora
+sudo dnf install jq /usr/bin/curl
+```
+
+Cole esta função no terminal.
+
+```bash
+instalar_ocre() (
+    set -euo pipefail
+    formato=$1
+    shift
+    pasta=$(mktemp -d)
+    trap 'rm -rf -- "$pasta"' EXIT
+    chmod 755 "$pasta"
+    cd "$pasta"
+
+    url=$(
+        curl -fsSL 'https://api.github.com/repos/zxlawdx/ocre-studio/releases?per_page=100' |
+        jq -er --arg formato "$formato" '
+            map(select(.draft == false and (.tag_name | test("^v[0-9]"))))
+            | max_by(.published_at)
+            | .assets[]
+            | select(.state == "uploaded" and (.name | startswith("ocre-studio")))
+            | select(.name | endswith($formato))
+            | .browser_download_url
+        '
+    )
+    pacote=${url##*/}
+    curl -fsSL -o "$pacote" "$url"
+    curl -fsSL -o "$pacote.sha256" "$url.sha256"
+    sha256sum -c "$pacote.sha256"
+    "$@" "./$pacote"
+)
+```
+
+Rode o comando correspondente à sua distribuição e abra o **Ocre Studio** pelo menu de aplicativos.
+
+```bash
+# Linux Mint ou Zorin OS
+instalar_ocre .deb sudo apt install
+```
+
+```bash
+# Fedora
+instalar_ocre .rpm sudo dnf install
+```
+
+Os pacotes exigem GTK 3 e WebKitGTK 4.1, instalados pelo gerenciador de pacotes quando disponíveis nos repositórios da distribuição.
 
 <p>
   <em>Nota: As distribuições padrão incluem o PyTorch configurado para execução em CPU. O uso de aceleração via GPU (CUDA) está disponível apenas em ambiente de desenvolvimento com drivers e dependências configurados.</em>
