@@ -52,8 +52,7 @@ jobs:
             python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json --recover-bundle "$RUNNER_TEMP/previous/Ocre-Studio-linux-x86_64-0.1.0-alpha.zip"
           fi
           python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json
-          python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target "$RUNNER_TEMP/kokentau-runtime"
-          echo "OCRE_MODEL_DIR=$RUNNER_TEMP/kokentau-runtime" >> "$GITHUB_ENV"
+          python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: verified-kokentau
@@ -102,7 +101,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip xvfb dbus-x11 libgl1-mesa-dri python3-gi python3-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1 libwebkit2gtk-4.1-0 rpm
+          sudo apt-get install -y zip unzip xvfb dbus-x11 libgl1-mesa-dri python3-gi python3-cairo gir1.2-gtk-3.0 gir1.2-webkit2-4.1 libwebkit2gtk-4.1-0 rpm
       - name: Install Windows installer compiler
         if: runner.os == 'Windows'
         shell: pwsh
@@ -125,8 +124,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m tools.model_release "$RUNNER_TEMP/kokentau" --verify docs/manifests/kokentau-v8.2.json
-          python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip" --target "$RUNNER_TEMP/kokentau-runtime"
-          echo "OCRE_MODEL_DIR=$RUNNER_TEMP/kokentau-runtime" >> "$GITHUB_ENV"
+          python -m tools.provision_kokentau "$RUNNER_TEMP/kokentau/kokentau-v8.2-checkpoints.zip" "$RUNNER_TEMP/kokentau/kokentau-v8.2-metadata.zip"
       - name: Expose GTK bindings after installing pinned Python dependencies
         if: runner.os == 'Linux'
         run: |
@@ -149,21 +147,9 @@ jobs:
           args=(--gui "${{ matrix.gui }}" --icon "${{ matrix.icon }}" --plugins --yes)
           if [[ "$RUNNER_OS" == Linux ]]; then args+=(--installer); fi
           python manage.py buildapp "${args[@]}"
-      - name: Compile and exercise the Windows setup wizard
+      - name: Compile the Windows setup wizard
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          python -m tools.package_windows
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $installers = @(Get-ChildItem dist -Filter '*-Setup.exe')
-          if ($installers.Count -ne 1) { throw 'Instalador Windows ausente ou ambíguo.' }
-          $setup = $installers[0]
-          $target = Join-Path $env:RUNNER_TEMP 'Ocre-Wizard-Smoke'
-          $result = Start-Process $setup.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=desktopicon', ('/DIR="' + $target + '"') -Wait -PassThru
-          if ($result.ExitCode -ne 0) { exit $result.ExitCode }
-          if (!(Test-Path (Join-Path $target 'assets/legal/TERMOS-DE-USO.txt'))) { throw 'Termos ausentes na instalação.' }
-          $app = Start-Process (Join-Path $target 'Ocre-Studio.exe') -ArgumentList '--self-test' -Wait -PassThru
-          if ($app.ExitCode -ne 0) { exit $app.ExitCode }
+        run: python -m tools.package_windows
       - name: Exercise GTK WebView on Linux
         if: runner.os == 'Linux'
         env:
@@ -204,6 +190,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python -m tools.package_linux
+      - name: Remove build-only model inputs
+        shell: bash
+        run: |
+          rm -rf assets/native-models "$RUNNER_TEMP/kokentau"
+      - name: Verify all Linux packages in a network namespace
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo -n unshare --net -- bash -euc 'ip link set lo up; exec "$@"' _ \
+            runuser -u "$(id -un)" -- env -u OCRE_MODEL_DIR PATH="$PATH" OMP_NUM_THREADS=2 \
+            VELA_GUI=gtk PYWEBVIEW_GUI=gtk VELA_PRODUCTION=1 python -m tools.check_distributions dist linux
+      - name: Verify Windows setup and ZIP with outbound traffic blocked
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Remove-Item Env:OCRE_MODEL_DIR -ErrorAction SilentlyContinue
+          $profiles = @(Get-NetFirewallProfile | Where-Object { $_.Enabled -eq 'False' })
+          try {
+            foreach ($profile in $profiles) { Set-NetFirewallProfile -Name $profile.Name -Enabled True }
+            python -m tools.check_distributions dist windows
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            foreach ($profile in $profiles) { Set-NetFirewallProfile -Name $profile.Name -Enabled False }
+          }
       - name: Reject Qt bindings in the frozen bundle
         run: python -m tools.dependency_notices --verify dist/Ocre-Studio
       - name: Check mandatory artifacts and generate checksums
@@ -215,7 +225,7 @@ jobs:
           if-no-files-found: error
   release:
     needs: [ci, build]
-    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.republish) || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[republish-alpha]'))
+    if: github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && inputs.republish) || (github.event_name == 'push' && github.ref == 'refs/heads/main' && (contains(github.event.head_commit.message, '[republish-alpha]') || contains(github.event.head_commit.message, '[release-alpha]')))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -231,16 +241,43 @@ jobs:
           python -m tools.release_artifacts release/ocre-linux linux --verify
           python -m tools.release_artifacts release/ocre-windows windows --verify
           python -c 'from config.settings import APP_VERSION; import os,re; tag=os.environ["GITHUB_REF_NAME"] if os.environ["GITHUB_REF_TYPE"]=="tag" else f"v{APP_VERSION}"; assert re.fullmatch(r"v\d+\.\d+\.\d+(?:-(?:alpha|beta)(?:\.\d+)?)?",tag) and tag == f"v{APP_VERSION}"'
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-kokentau
+          path: release/models
+      - name: Restore the public Kokentau model release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m tools.model_release release/models --verify docs/manifests/kokentau-v8.2.json
+          cp docs/manifests/kokentau-v8.2.json release/models/kokentau-manifest.json
+          cd release/models
+          if gh release view "$KOKENTAU_RELEASE" --repo "$GITHUB_REPOSITORY" >/dev/null; then
+            gh release download "$KOKENTAU_RELEASE" --repo "$GITHUB_REPOSITORY" --pattern 'kokentau-*' --dir published
+            for asset in kokentau-*; do cmp "$asset" "published/$asset"; done
+          else
+            gh release create "$KOKENTAU_RELEASE" kokentau-* --repo "$GITHUB_REPOSITORY" \
+              --verify-tag --title 'Kokentau V8.2' --latest=false \
+              --notes 'Checkpoints originais de Marinaldo da Costa Barroso Filho e metadados públicos Kokentau.'
+          fi
       - name: Publish verified artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ "$GITHUB_REF_TYPE" != tag ]]; then
-            tag=$(python -c 'from config.settings import APP_VERSION; print("v"+APP_VERSION)')
+          set -euo pipefail
+          tag=$(python -c 'from config.settings import APP_VERSION; print("v"+APP_VERSION)')
+          if [[ "$GITHUB_REF_TYPE" != tag ]] && gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" release/ocre-*/* --clobber
             gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$tag" -f sha="$GITHUB_SHA" -F force=true
             exit 0
           fi
           flags=()
-          if [[ "$GITHUB_REF_NAME" == *-alpha* || "$GITHUB_REF_NAME" == *-beta* ]]; then flags+=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" release/ocre-*/* --verify-tag --generate-notes "${flags[@]}"
+          if [[ "$tag" == *-alpha* || "$tag" == *-beta* ]]; then flags+=(--prerelease); fi
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            flags+=(--verify-tag)
+          else
+            flags+=(--target "$GITHUB_SHA")
+          fi
+          gh release create "$tag" release/ocre-*/* --generate-notes "${flags[@]}"

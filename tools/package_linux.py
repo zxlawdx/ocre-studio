@@ -145,7 +145,6 @@ def make_appimage(work: Path, bundle: Path, dist: Path) -> None:
     target = dist / f"Ocre-Studio-{APP_VERSION}-x86_64.AppImage"
     env = {**os.environ, "ARCH": "x86_64", "APPIMAGE_EXTRACT_AND_RUN": "1"}
     subprocess.run([tool, appdir, target], env=env, check=True)
-    subprocess.run([target, "--self-test"], env=env, check=True, timeout=100)
 
 
 def main() -> None:

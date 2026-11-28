@@ -8,9 +8,9 @@ import os
 import sys
 from pathlib import Path
 
-from vela.database import app_data_dir
-
 from apps.model_library.service import MAX_ENTRY, V7_FILES, V8_FILES, KokentauModel
+
+BUNDLED_MODELS = Path("assets/native-models/kokentau")
 
 V7_PAYLOAD = {
     "grade.pt": "7128b4b9e0a8f1ef4ac1c780b43d8f3f03654b3f1d90e38b4e86abd968f8281e",
@@ -33,12 +33,10 @@ class NativeModelRegistry:
         if directory is None:
             if configured := os.environ.get("OCRE_MODEL_DIR"):
                 directory = Path(configured).expanduser()
-            elif getattr(sys, "frozen", False):
-                directory = app_data_dir("Ocre-Studio") / "models/kokentau"
             else:
-                local = root / "native-resources/kokentau"
-                legacy = root / "assets/native-models/kokentau"
-                directory = legacy if legacy.is_dir() else local
+                directory = root / BUNDLED_MODELS
+                if not getattr(sys, "frozen", False) and not directory.is_dir():
+                    directory = root / "native-resources/kokentau"
         self.directory = directory
         self._model: KokentauModel | None = None
         self._requested: str | None = None

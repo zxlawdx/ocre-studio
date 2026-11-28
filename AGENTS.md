@@ -14,6 +14,6 @@ Use composição e injeção de dependências em serviços com estado e funçõe
 
 ## Integridade e publicação
 
-Preserve originais, registre hashes, parâmetros, versões e sequência das operações. Carregue checkpoints com desserialização restrita e validação estrita. Mantenha pesos, dados, fotos privadas, coordenadas e credenciais fora do Git, dos caches e dos instaladores. Valide o runtime e integração, teste algoritmos com fixtures sintéticas e compare a inferência real com a referência local.
+Preserve originais, registre hashes, parâmetros, versões e sequência das operações. Carregue checkpoints com desserialização restrita e validação estrita. Mantenha os checkpoints fora do Git e dos caches. Inclua nos instaladores os pesos Kokentau autorizados e os metadados públicos verificados. Exclua dados, fotos privadas, coordenadas e credenciais. Valide o runtime e integração, teste algoritmos com fixtures sintéticas e compare a inferência real com a referência local.
 
 Revise o conteúdo staged antes de enviar. Use a identidade Git local do autor. Valide lint, testes, assets e binários congelados no CI. Builds Windows exigem runner Windows. Publique prereleases somente após validar os artefatos previstos e seus SHA-256.

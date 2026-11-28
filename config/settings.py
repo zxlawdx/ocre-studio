@@ -3,7 +3,7 @@
 import sys
 
 APP_TITLE = "Ocre Studio"
-APP_VERSION = "0.1.0-alpha.1"
+APP_VERSION = "0.1.0-alpha.2"
 APP_AUTHOR = "Marinaldo da Costa Barroso Filho"
 APP_DESCRIPTION = "Archaeological Imaging & AI"
 APP_ICON = (

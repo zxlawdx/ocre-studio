@@ -31,3 +31,20 @@ def test_provisioned_weights_change_the_hybrid_output() -> None:
     assert np.array_equal(native["combinado"][~roi], pixels[~roi])
     assert np.array_equal(adaptive[~roi], pixels[~roi])
     assert not np.array_equal(native["combinado"][roi], classical["combinado"][roi])
+
+
+def test_frozen_registry_prefers_bundle_and_honors_explicit_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sys
+
+    from apps.model_library.native import BUNDLED_MODELS
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "Ocre-Studio.exe"))
+    monkeypatch.delenv("OCRE_MODEL_DIR", raising=False)
+    assert NativeModelRegistry().directory == tmp_path / BUNDLED_MODELS
+
+    override = tmp_path / "diagnostics"
+    monkeypatch.setenv("OCRE_MODEL_DIR", str(override))
+    assert NativeModelRegistry().directory == override

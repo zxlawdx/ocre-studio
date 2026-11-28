@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from apps.model_library.native import NativeModelRegistry, project_root
+from apps.model_library.native import BUNDLED_MODELS, NativeModelRegistry, project_root
 from apps.model_library.service import V7_FILES, V8_FILES, _read_entries
 
 
@@ -40,6 +40,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("weights", type=Path)
     parser.add_argument("metadata", type=Path)
-    parser.add_argument("--target", type=Path, default=project_root() / "native-resources/kokentau")
+    parser.add_argument("--target", type=Path, default=project_root() / BUNDLED_MODELS)
     options = parser.parse_args()
     provision(options.weights, options.metadata, options.target)

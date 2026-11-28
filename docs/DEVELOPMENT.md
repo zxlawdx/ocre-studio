@@ -11,6 +11,6 @@ python -m pytest -q
 python manage.py runapp
 ```
 
-Para provisionar os modelos nativos no ambiente de desenvolvimento, execute `python -m tools.provision_kokentau PACOTE_V7.zip PACOTE_V8.zip`. O carregamento é automático quando uma técnica Kokentau é acionada e os recursos locais ficam em `native-resources/kokentau`. Consulte [o build](BUILD.md) para distribuição e [a validação científica](KOKENTAU_V8_2.md) para o protocolo de comparação.
+Para provisionar os modelos nativos no ambiente de desenvolvimento, execute `python -m tools.provision_kokentau PACOTE_V7.zip PACOTE_V8.zip`. O carregamento é automático quando uma técnica Kokentau é acionada e os recursos locais ficam em `assets/native-models/kokentau`. Consulte [o build](BUILD.md) para distribuição e [a validação científica](KOKENTAU_V8_2.md) para o protocolo de comparação.
 
 A avaliação visual e os cenários de interação estão em [UX_HEURISTIC_EVALUATION.md](UX_HEURISTIC_EVALUATION.md). Execute a validação nativa da área de trabalho com `python -m tools.smoke_gui --native --workspace` e os testes de geometria com `node --test tests/roi.test.mjs`.
