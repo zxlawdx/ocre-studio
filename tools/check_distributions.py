@@ -22,24 +22,40 @@ def check_executable(executable: Path, env: dict[str, str], work: Path) -> None:
     report = work / "inference.json"
     command = [executable, "--self-test", f"--self-test-report={report}"]
     if os.name == "nt":
-        rule = f"Ocre-offline-{work.name}"
-        firewall = ["netsh", "advfirewall", "firewall"]
+        firewall = ["pwsh", "-NoProfile", "-NonInteractive", "-Command"]
+        rule_env = {
+            **os.environ,
+            "OCRE_TEST_FIREWALL_RULE": f"Ocre-offline-{work.name}",
+            "OCRE_TEST_PROGRAM": str(executable.resolve(strict=True)),
+        }
         run(
             [
                 *firewall,
-                "add",
-                "rule",
-                f"name={rule}",
-                "dir=out",
-                "action=block",
-                "profile=any",
-                f"program={executable}",
-            ]
+                "$ErrorActionPreference = 'Stop'; "
+                "New-NetFirewallRule -Name $env:OCRE_TEST_FIREWALL_RULE "
+                "-DisplayName $env:OCRE_TEST_FIREWALL_RULE -Program $env:OCRE_TEST_PROGRAM "
+                "-Direction Outbound -Action Block -Profile Any | Out-Null",
+            ],
+            rule_env,
         )
         try:
+            run(
+                [
+                    *firewall,
+                    "if (!(Get-NetFirewallRule -PolicyStore ActiveStore "
+                    "-Name $env:OCRE_TEST_FIREWALL_RULE -ErrorAction Stop)) { exit 1 }",
+                ],
+                rule_env,
+            )
             run(command, env, work)
         finally:
-            run([*firewall, "delete", "rule", f"name={rule}"])
+            run(
+                [
+                    *firewall,
+                    "Remove-NetFirewallRule -Name $env:OCRE_TEST_FIREWALL_RULE -ErrorAction Stop",
+                ],
+                rule_env,
+            )
     else:
         run(command, env, work)
     expected = {
@@ -127,7 +143,8 @@ def main() -> None:
         if artifact.suffix == ".json":
             continue
         print(f"Validating installed Kokentau runtime: {artifact.name}", flush=True)
-        with TemporaryDirectory(prefix="ocre-offline-") as directory:
+        scratch = os.environ.get("RUNNER_TEMP") if args.platform == "windows" else None
+        with TemporaryDirectory(prefix="ocre-offline-", dir=scratch) as directory:
             work = Path(directory)
             try:
                 check_artifact(artifact, args.platform, work)
