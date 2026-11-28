@@ -208,9 +208,17 @@ def exercise_workspace(window, saved: Path, screenshot: Path | None) -> None:
         photo.focus();
         photo.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
     """)
-    wait_for(window, "document.querySelector('#filename').textContent === 'painel-claro.png'")
+    wait_for(
+        window,
+        "document.querySelector('#filename').textContent === 'painel-claro.png' && "
+        "document.querySelector('.viewport').getAttribute('aria-busy') === 'false'",
+    )
     click('#gallery [data-photo="Painel 01/painel-escuro.png"]')
-    wait_for(window, "document.querySelector('#filename').textContent === 'painel-escuro.png'")
+    wait_for(
+        window,
+        "document.querySelector('#filename').textContent === 'painel-escuro.png' && "
+        "document.querySelector('.viewport').getAttribute('aria-busy') === 'false'",
+    )
     assert window.evaluate_js("document.querySelectorAll('.document-tab').length") == 2
     assert window.evaluate_js("""
         (() => {

@@ -10,8 +10,8 @@ import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from apps.model_library.native import V7_PAYLOAD
-from tools.release_artifacts import artifacts
+from apps.model_library.native import BUNDLED_MODELS, V7_PAYLOAD, NativeModelRegistry
+from tools.release_artifacts import artifacts, digest
 
 
 def run(command, env=None, cwd=None) -> None:
@@ -109,6 +109,12 @@ def check_artifact(artifact: Path, platform: str, work: Path) -> None:
             return
         case _:
             raise ValueError(f"Unknown distribution format: {artifact.name}")
+    registry = NativeModelRegistry(target / BUNDLED_MODELS)
+    if not registry.available():
+        raise FileNotFoundError(f"Incomplete Kokentau payload in {artifact.name}.")
+    for name, expected in V7_PAYLOAD.items():
+        if digest(registry.directory / "v7" / name) != expected:
+            raise ValueError(f"Invalid SHA-256 for {name} in {artifact.name}.")
     check_executable(target / executable, env, work)
 
 
